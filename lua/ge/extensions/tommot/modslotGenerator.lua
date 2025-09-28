@@ -600,7 +600,7 @@ local function onExtensionLoaded() -- TODO: needs check if the Extension's alrea
                 setExtensionUnloadMode("tommot_multislot", "manual")
                 multislot_module = tommot_multislot
             end
-            if USE_COROUTINES then core_jobsystem.create(multislot_module.generateMultiSlotJob, CONCURRENCY_DELAY) else multislot_module.generateMultiSlotMod() end
+            if USE_COROUTINES then core_jobsystem.create(tommot_multislot.generateMultiSlotJob, CONCURRENCY_DELAY) else multislot_module.generateMultiSlotMod() end
         end
         if ADDITIONAL_TO_MULTISLOT then
             extensions.load("tommot_additionalToMultiSlot")
