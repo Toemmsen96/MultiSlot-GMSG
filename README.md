@@ -1,4 +1,4 @@
-# General Modslot Generator / MultiSlot for BeamNG
+# MultiSlot / General ModSlot Generator for BeamNG
 This Mod aims to add a simple way to make "Additional Modification" - Mods for BeamNG, that automatically get generated for every installed vehicle ingame, even modded ones.
 
 You only need to add a Json-Template to ```/modslotgenerator/``` for a mod and it generates everything based on the Settings in the UI.  
