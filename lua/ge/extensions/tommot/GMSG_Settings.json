@@ -6,5 +6,6 @@
     "LogLevel":0,
     "MultiSlotMods":false,
     "SeparateMods":false,
-    "UseCoroutines":true
+    "UseCoroutines":true,
+    "CacheGeneratedMods":true
   }

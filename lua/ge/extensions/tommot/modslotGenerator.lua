@@ -31,6 +31,7 @@ local isWaitingForAutoPack = false
 local isWaitingForPackAll = false
 local CONCURRENCY_DELAY = 1/100
 local TIMER_GENERATION = true
+local CACHE_GENERATED_MODS = true -- defines if generated mods are cached to speed up generation
 -- end constants
 
 --helpers
@@ -154,7 +155,8 @@ local function loadSettings() -- Loads Settings from the file
         AUTO_APPLY_SETTINGS = settings.AutoApplySettings
         AUTOPACK = settings.Autopack
         LOGLEVEL = settings.LogLevel
-        GMSGMessage("Settings loaded: SeparateMods: " .. tostring(SEPARATE_MODS) .. " MultiSlot: " .. tostring(MULTISLOT_MODS) .." AdditionalToMS: " .. tostring(ADDITIONAL_TO_MULTISLOT) .. " DetailedDebug: " .. tostring(DET_DEBUG) .. " UseCoroutines: " .. tostring(USE_COROUTINES).." Autopack all: "..tostring(AUTOPACK), "Info", "info", 2000)
+        CACHE_GENERATED_MODS = settings.CacheGeneratedMods
+        GMSGMessage("Settings loaded: SeparateMods: " .. tostring(SEPARATE_MODS) .. " MultiSlot: " .. tostring(MULTISLOT_MODS) .." AdditionalToMS: " .. tostring(ADDITIONAL_TO_MULTISLOT) .. " DetailedDebug: " .. tostring(DET_DEBUG) .. " UseCoroutines: " .. tostring(USE_COROUTINES).." Autopack all: "..tostring(AUTOPACK) .. " CacheGeneratedMods: " .. tostring(CACHE_GENERATED_MODS), "Info", "info", 2000)
         sendSettingsToUI()
     end 
     if settings == nil then
@@ -171,10 +173,11 @@ local function saveSettings()
         UseCoroutines = USE_COROUTINES,
         AutoApplySettings = AUTO_APPLY_SETTINGS,
         Autopack = AUTOPACK,
-        LogLevel = LOGLEVEL
+        LogLevel = LOGLEVEL,
+        CacheGeneratedMods = CACHE_GENERATED_MODS
     }
     writeJsonFile(SETTINGS_PATH, settings, true)
-    GMSGMessage("Settings saved: SeparateMods: " .. tostring(SEPARATE_MODS) .." MultiSlot: "..tostring(MULTISLOT_MODS) .. " DetailedDebug: " .. tostring(DET_DEBUG) .. " UseCoroutines: " .. tostring(USE_COROUTINES).." Autopack all: ".. tostring(AUTOPACK), "Info", "info", 2000)
+    GMSGMessage("Settings saved: SeparateMods: " .. tostring(SEPARATE_MODS) .." MultiSlot: "..tostring(MULTISLOT_MODS) .. " DetailedDebug: " .. tostring(DET_DEBUG) .. " UseCoroutines: " .. tostring(USE_COROUTINES).." Autopack all: ".. tostring(AUTOPACK) .. " CacheGeneratedMods: " .. tostring(CACHE_GENERATED_MODS), "Info", "info", 2000)
     sendSettingsToUI()
 end
 
@@ -688,7 +691,12 @@ local function onModDeactivated(mod)
     if validMods[mod.modname] then
         log('D', 'onModDeactivated', "Unloading mod: " .. mod.modname)
         GMSGMessage("Unloading mod: " .. mod.modname, "Info", "info", 2000)
-        deleteTempFiles()
+        if not CACHE_GENERATED_MODS then
+            log('D', 'onExit', "Deleting temp files due to cache setting")
+            deleteTempFiles()
+            return
+        end
+        
         extensions.unload("tommot_additionalToMultiSlot") -- unloads additionalToMultiSlot
         extensions.unload("tommot_gmsgUI") -- unloads UI
         extensions.unload("tommot_modslotGenerator") -- unloads this
@@ -701,6 +709,10 @@ local function onExit()
     extensions.unload("tommot_additionalToMultiSlot") -- unloads additionalToMultiSlot
     extensions.unload("tommot_gmsgUI") -- unloads UI
     extensions.unload("tommot_modslotGenerator") -- unloads this
+    if CACHE_GENERATED_MODS then
+        log('D', 'onExit', "Not deleting temp files due to cache setting")
+        return
+    end
     deleteTempFiles()
 end
 
