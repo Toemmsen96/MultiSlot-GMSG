@@ -30,6 +30,47 @@ local function writeJsonFile(path, data, compact)
     return jsonWriteFile(path, data, compact)
 end
 
+local function writeFileAtomic(finalPath, data, compact)
+    local tempPath = finalPath .. ".tmp"
+    
+    -- Write to temp file first as validation
+    local writeSuccess = writeJsonFile(tempPath, data, compact)
+    if not writeSuccess then
+        log('E', 'writeFileAtomic', "Failed to write temp file: " .. tempPath)
+        return false
+    end
+    
+    -- Validate temp file
+    local validateData = readJsonFile(tempPath)
+    if validateData == nil then
+        log('E', 'writeFileAtomic', "Validation failed for temp file: " .. tempPath)
+        FS:removeFile(tempPath)
+        return false
+    end
+    
+    -- Write directly to final path (overwrite safely)
+    local finalWriteSuccess = writeJsonFile(finalPath, data, compact)
+    if not finalWriteSuccess then
+        log('E', 'writeFileAtomic', "Failed to write final file: " .. finalPath)
+        FS:removeFile(tempPath)
+        return false
+    end
+    
+    -- Validate final file
+    local validateFinal = readJsonFile(finalPath)
+    if validateFinal == nil then
+        log('E', 'writeFileAtomic', "Validation failed for final file: " .. finalPath)
+        FS:removeFile(tempPath)
+        return false
+    end
+    
+    -- Clean up temp file
+    FS:removeFile(tempPath)
+    
+    if DET_DEBUG then log('D', 'writeFileAtomic', "Successfully wrote and validated: " .. finalPath) end
+    return true
+end
+
 local function getModNameFromPath(path) -- stolen from modmanager.lua lol, credits to BeamNG
     local modname = string.lower(path)
     modname = modname:gsub('dir:/', '') --should have been killed by now
@@ -81,7 +122,7 @@ local function loadMainSlot(vehicleDir)
         -- is it valid?
         local mainPartKey = findMainPart(vehicleJbeam)
         if mainPartKey ~= nil then
-            return mainPartKey
+            return vehicleJbeam[mainPartKey]
         end
     end
     if DET_DEBUG then log('W', 'loadMainSlot', "No main slot found for " .. vehicleDir) end
@@ -175,7 +216,6 @@ local function getLicensePlateAdditionalMods()
                 end
                 
                 if hasLicensePlateSlot then
-                    local content = readFile(file)
                     if part.information and part.information.name then
                         local infoName = part.information.name:lower()
                         if infoName:find("plate") and infoName:find("design") then
@@ -194,25 +234,52 @@ local function getLicensePlateAdditionalMods()
                         if DET_DEBUG then log('D', 'getLicensePlateAdditionalMods', "Part key already ends with _additional_lp, skipping: " .. partKey) end
                         additionalPartKey = partKey:lower()
                     end
-                    local modifiedContent = content
+
+                    local outputPath = gmsg.GENERATED_PATH:lower().."/vehicles/common/modslot/" .. additionalPartKey .. ".jbeam"
+                    if FS:fileExists(outputPath) and readJsonFile(outputPath) ~= nil then
+                        table.insert(additionalMods, {
+                            partKey = additionalPartKey,
+                            file = file,
+                            name = part.information and part.information.name or partKey
+                        })
+                        if DET_DEBUG then log('D', 'getLicensePlateAdditionalMods', "Using existing additional mod: " .. additionalPartKey) end
+                        goto continue
+                    end
                     
-                    -- Replace the slotType from licenseplate_design_2_1 to the new additional type
-                    modifiedContent = modifiedContent:gsub("licenseplate_design_2_1", additionalPartKey)
+                    -- Create a deep copy and modify the data structure instead of manipulating strings
+                    local modifiedJbeam = deepcopy(jbeam)
+                    if modifiedJbeam == nil then
+                        log('E', 'getLicensePlateAdditionalMods', "Failed to deepcopy jbeam for: " .. partKey)
+                        goto continue
+                    end
                     
-                    -- Replace the partKey in the JSON object definition
-                    modifiedContent = modifiedContent:gsub(partKey, additionalPartKey)
-                    additionalPartKey = additionalPartKey:lower()
+                    -- Create new entry with modified key and slotType
+                    modifiedJbeam[additionalPartKey] = deepcopy(part)
+                    modifiedJbeam[additionalPartKey].slotType = additionalPartKey
+                    modifiedJbeam[partKey] = nil  -- Remove original entry
                     
-                    -- Ensure the directory exists
-                    writeFile(gmsg.GENERATED_PATH:lower().."/vehicles/common/modslot/" .. additionalPartKey .. ".jbeam", modifiedContent)
+                    -- Write using proper JSON serialization with atomic operation
+                    FS:directoryCreate(gmsg.GENERATED_PATH:lower().."/vehicles/common/modslot/", true)
                     
+                    local writeSuccess = writeFileAtomic(outputPath, modifiedJbeam, true)
+                    if not writeSuccess then
+                        log('E', 'getLicensePlateAdditionalMods', "Failed to write file: " .. outputPath)
+                        goto continue
+                    end
+                    
+                    -- Validate by reading back
+                    local validateJbeam = readJsonFile(outputPath)
+                    if validateJbeam == nil then
+                        log('E', 'getLicensePlateAdditionalMods', "Validation failed - file not readable: " .. outputPath)
+                        goto continue
+                    end
                     
                     table.insert(additionalMods, {
                         partKey = additionalPartKey,
                         file = file,
                         name = part.information and part.information.name or partKey
                     })
-                    if DET_DEBUG then log('D', 'getLicensePlateAdditionalMods', "Created additional mod: " .. additionalPartKey) end
+                    if DET_DEBUG then log('D', 'getLicensePlateAdditionalMods', "Created and validated additional mod: " .. additionalPartKey) end
                 end
                 ::continue::
             end
@@ -243,23 +310,47 @@ local function getAdditionalMods(vehicleDir)
                 if part.slotType == vehicleModSlot and 
                    not ends_with(partKey, "_multimod") and
                    not ends_with(vehicleModSlot, "_additional") then
-                    local content = readFile(file)
                     
                     -- First, create a modified part key for our new additional part
                     local additionalPartKey = partKey .. "_additional"
+                    local outputPath = gmsg.GENERATED_PATH:lower().."/vehicles/" .. vehicleDir .. "/modslot/" .. partKey .. "_multislot.jbeam"
+                    if FS:fileExists(outputPath) and readJsonFile(outputPath) ~= nil then
+                        table.insert(additionalMods, {
+                            partKey = partKey,
+                            file = file,
+                            name = part.information and part.information.name or partKey
+                        })
+                        if DET_DEBUG then log('D', 'getAdditionalMods', "Using existing additional mod: " .. partKey) end
+                        break
+                    end
                     
-                    -- Only replace the exact matches for partKey, not partKey within other strings
-                    -- Use a pattern with word boundaries to ensure we're replacing the whole word
-                    local modifiedContent = content
+                    -- Create a deep copy and modify the data structure instead of manipulating strings
+                    local modifiedJbeam = deepcopy(jbeamData)
+                    if modifiedJbeam == nil then
+                        log('E', 'getAdditionalMods', "Failed to deepcopy jbeam for: " .. partKey)
+                        break
+                    end
                     
-                    -- Replace the slotType references
-                    modifiedContent = modifiedContent:gsub('"slotType"%s*:%s*"' .. vehicleModSlot .. '"', '"slotType":"' .. additionalPartKey .. '"')
+                    -- Create new entry with modified key and slotType
+                    modifiedJbeam[additionalPartKey] = deepcopy(part)
+                    modifiedJbeam[additionalPartKey].slotType = additionalPartKey
+                    modifiedJbeam[partKey] = nil  -- Remove original entry
                     
-                    -- Replace the partKey in the JSON object definition (at the beginning of a line)
-                    modifiedContent = modifiedContent:gsub('"' .. partKey .. '"%s*:', '"' .. additionalPartKey .. '":')
+                    -- Write using proper JSON serialization with atomic operation
+                    FS:directoryCreate(gmsg.GENERATED_PATH:lower().."/vehicles/" .. vehicleDir .. "/modslot/", true)
                     
-                    -- Write the modified content to a new file
-                    writeFile(gmsg.GENERATED_PATH:lower().."/vehicles/" .. vehicleDir .. "/modslot/" .. partKey .. "_multislot.jbeam", modifiedContent)
+                    local writeSuccess = writeFileAtomic(outputPath, modifiedJbeam, true)
+                    if not writeSuccess then
+                        log('E', 'getAdditionalMods', "Failed to write file: " .. outputPath)
+                        break
+                    end
+                    
+                    -- Validate by reading back
+                    local validateJbeam = readJsonFile(outputPath)
+                    if validateJbeam == nil then
+                        log('E', 'getAdditionalMods', "Validation failed - file not readable: " .. outputPath)
+                        break
+                    end
                     
                     -- Add to our additional mods list
                     table.insert(additionalMods, {
@@ -268,7 +359,7 @@ local function getAdditionalMods(vehicleDir)
                         name = part.information and part.information.name or partKey
                     })
                     
-                    if DET_DEBUG then log('D', 'getAdditionalMods', "Found additional mod: " .. partKey) end
+                    if DET_DEBUG then log('D', 'getAdditionalMods', "Created and validated additional mod: " .. partKey) end
                     break
                 end
             end

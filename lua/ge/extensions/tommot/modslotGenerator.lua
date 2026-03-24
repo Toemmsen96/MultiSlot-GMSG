@@ -115,6 +115,79 @@ local function writeJsonFile(path, data, compact)
     return jsonWriteFile(path, data, compact)
 end
 
+local function readJsonFileSafe(path)
+    if isEmptyOrWhitespace(path) then
+        log('E', 'readJsonFileSafe', "path is empty")
+        return nil
+    end
+    
+    if not FS:fileExists(path) then
+        log('E', 'readJsonFileSafe', "File does not exist: " .. path)
+        return nil
+    end
+    
+    local content = readFile(path)
+    if not content then
+        log('E', 'readJsonFileSafe', "Failed to read file: " .. path)
+        return nil
+    end
+    
+    local ok, data = pcall(json.decode, content)
+    if not ok then
+        log('E', 'readJsonFileSafe', "JSON decode error in " .. path .. ": " .. tostring(data))
+        return nil
+    end
+    
+    if type(data) ~= 'table' then
+        log('E', 'readJsonFileSafe', "Decoded JSON is not a table in: " .. path)
+        return nil
+    end
+    
+    return data
+end
+
+local function validateSlots(part, sourceFile)
+    if not part then return false end
+    if not part.slots and not part.slots2 then return true end
+    
+    local slots = part.slots or part.slots2
+    if type(slots) ~= 'table' then
+        log('E', 'validateSlots', "slots is not a table in " .. sourceFile .. ", partName: " .. tostring(part.partName))
+        return false
+    end
+    
+    if #slots == 0 then return true end
+    
+    -- Check for header in old slots format
+    if part.slots and type(slots[1]) == 'table' then
+        if slots[1][1] ~= "type" then
+            if DET_DEBUG then log('W', 'validateSlots', "slots missing header in " .. sourceFile .. ", adding default header") end
+            table.insert(slots, 1, {"type", "default", "description"})
+        end
+    end
+    
+    return true
+end
+
+local function validatePart(part, sourceFile)
+    if not part or type(part) ~= 'table' then
+        log('E', 'validatePart', "Part is not a valid table in: " .. sourceFile)
+        return false
+    end
+    
+    if not part.partName then
+        log('W', 'validatePart', "Part missing partName in: " .. sourceFile)
+    end
+    
+    if not part.slotType then
+        log('W', 'validatePart', "Part missing slotType in: " .. sourceFile .. ", partName: " .. tostring(part.partName))
+    end
+    
+    validateSlots(part, sourceFile)
+    
+    return true
+end
+
 local function getModNameFromPath(path) -- stolen from modmanager.lua lol, credits to BeamNG
     local modname = string.lower(path)
     modname = modname:gsub('dir:/', '') --should have been killed by now
@@ -288,7 +361,7 @@ local function loadMainSlot(vehicleDir)
         -- is it valid?
         local mainPartKey = findMainPart(vehicleJbeam)
         if mainPartKey ~= nil then
-            return mainPartKey
+            return vehicleJbeam[mainPartKey]
         end
     end
     if DET_DEBUG then log('W', 'loadMainSlot', "No main slot found for " .. vehicleDir) end
@@ -346,20 +419,20 @@ local function generate(vehicleDir, templateName)
         if DET_DEBUG then log('D', 'generate', vehicleDir .. " has no mod slot") end
         return
     end
-	if DET_DEBUG then
-		if existingData == nil then
-			log('D', 'generate', "No existingData for " .. vehicleDir)
-		else
-			log('D', 'generate', "Loaded existing Version: " .. existingVersion .. " for " .. vehicleDir)
-		end
-		
-		if existingData ~= nil and existingVersion == templateVersion then
-			log('D', 'generate', vehicleDir .. " up to date")
-			return
-		else
-			log('D', 'generate', vehicleDir .. " NOT up to date, updating")
-		end
-	end
+    if DET_DEBUG then
+        if existingData == nil then
+            log('D', 'generate', "No existingData for " .. vehicleDir)
+        else
+            log('D', 'generate', "Loaded existing Version: " .. tostring(existingVersion) .. " for " .. vehicleDir)
+        end
+    end
+
+    if existingData ~= nil and existingVersion == templateVersion then
+        if DET_DEBUG then log('D', 'generate', vehicleDir .. " up to date") end
+        return
+    else
+        if DET_DEBUG then log('D', 'generate', vehicleDir .. " NOT up to date, updating") end
+    end
     template_module.makeAndSaveNewTemplate(vehicleDir, vehicleModSlot, template, convName)
 end
 

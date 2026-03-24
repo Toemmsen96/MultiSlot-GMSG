@@ -19,12 +19,52 @@ local function GMSGMessage(msg, title, icon, duration)
     tommot_modslotGenerator.GMSGMessage(msg, title, icon, duration)
 end
 
+local function writeFileAtomic(finalPath, data, compact)
+    local tempPath = finalPath .. ".tmp"
+    
+    -- Write to temp file first as validation
+    local writeSuccess = writeJsonFile(tempPath, data, compact)
+    if not writeSuccess then
+        log('E', 'writeFileAtomic', "Failed to write temp file: " .. tempPath)
+        return false
+    end
+    
+    -- Validate temp file
+    local validateData = readJsonFile(tempPath)
+    if validateData == nil then
+        log('E', 'writeFileAtomic', "Validation failed for temp file: " .. tempPath)
+        FS:removeFile(tempPath)
+        return false
+    end
+    
+    -- Write directly to final path (overwrite safely)
+    local finalWriteSuccess = writeJsonFile(finalPath, data, compact)
+    if not finalWriteSuccess then
+        log('E', 'writeFileAtomic', "Failed to write final file: " .. finalPath)
+        FS:removeFile(tempPath)
+        return false
+    end
+    
+    -- Validate final file
+    local validateFinal = readJsonFile(finalPath)
+    if validateFinal == nil then
+        log('E', 'writeFileAtomic', "Validation failed for final file: " .. finalPath)
+        FS:removeFile(tempPath)
+        return false
+    end
+    
+    -- Clean up temp file
+    FS:removeFile(tempPath)
+    
+    if DET_DEBUG then log('D', 'writeFileAtomic', "Successfully wrote and validated: " .. finalPath) end
+    return true
+end
+
 
 local function makeAndSaveNewTemplate(vehicleDir, slotName, helperTemplate, templateName)
     local templateCopy = deepcopy(helperTemplate)
     if templateCopy == nil then
         log('W', 'makeAndSaveNewTemplate', "templateCopy is nil")
-        --GMSGMessage("Error: templateCopy is nil", "Error", "error", 5000)
         return
     end
     local convName = convertName(templateName)
@@ -33,9 +73,15 @@ local function makeAndSaveNewTemplate(vehicleDir, slotName, helperTemplate, temp
     templateCopy.slotType = slotName
     mainPart[vehicleDir .. "_" .. convName] = templateCopy
     
-    --save it
+    --save it with atomic operation
     local savePath = tommot_modslotGenerator.getModSlotJbeamPath(vehicleDir, convName)
-    writeJsonFile(savePath, mainPart, true)
+    local writeSuccess = writeFileAtomic(savePath, mainPart, true)
+    if not writeSuccess then
+        log('E', 'makeAndSaveNewTemplate', "Failed to save template to: " .. savePath)
+        return
+    end
+    
+    if DET_DEBUG then log('D', 'makeAndSaveNewTemplate', "Successfully saved new template: " .. templateName .. " to " .. savePath) end
 end
 
 --template version finder
@@ -109,9 +155,17 @@ local function makeAndSaveCustomTemplate(vehicleDir, slotName, helperTemplate, t
     templateCopy.slotType = slotName
     mainPart[vehicleDir .. "_" .. convName] = templateCopy
     
-    --save it
+    --save it with atomic operation
     local savePath = "mods/" .. outputPath .. "/vehicles/".. vehicleDir.."/" ..vehicleDir.. "_" .. convName .. ".jbeam"
-    writeJsonFile(savePath, mainPart, true)
+    FS:directoryCreate("mods/" .. outputPath .. "/vehicles/".. vehicleDir.."/", true)
+    
+    local writeSuccess = writeFileAtomic(savePath, mainPart, true)
+    if not writeSuccess then
+        log('E', 'makeAndSaveCustomTemplate', "Failed to save custom template to: " .. savePath)
+        return
+    end
+    
+    if DET_DEBUG then log('D', 'makeAndSaveCustomTemplate', "Successfully saved custom template: " .. savePath) end
 end
 
 local function getTemplateNames()
