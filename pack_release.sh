@@ -17,7 +17,7 @@ echo "Creating $ZIP_NAME..."
 # Create zip excluding hidden files and folders, and shell scripts
 # -r: recursive
 # -x: exclude pattern
-zip -r "$ZIP_NAME" . -x "*/.*" ".*" ".*/*" "*.sh"
+zip -r "$ZIP_NAME" . -x "*/.*" ".*" ".*/*" "*.sh" "refs/*"
 
 # Check if zip creation was successful
 if [ $? -eq 0 ]; then
