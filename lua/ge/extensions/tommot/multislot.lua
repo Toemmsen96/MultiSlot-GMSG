@@ -24,6 +24,34 @@ local function GMSGMessage(msg, title, icon, duration)
     tommot_modslotGenerator.GMSGMessage(msg, title, icon, duration)
 end
 
+local function dedupeSlotRows(slotTable)
+    if type(slotTable) ~= 'table' then
+        return slotTable
+    end
+
+    local deduped = {}
+    local seen = {}
+
+    for i, row in ipairs(slotTable) do
+        -- Preserve the two header rows from mSGTemplate.json.
+        if i <= 2 then
+            table.insert(deduped, row)
+        elseif type(row) == 'table' then
+            local key = row[1]
+            if key == nil or not seen[key] then
+                table.insert(deduped, row)
+                if key ~= nil then
+                    seen[key] = true
+                end
+            end
+        else
+            table.insert(deduped, row)
+        end
+    end
+
+    return deduped
+end
+
 local function saveMultiTemplate(template, templateName)
     local convName = convertName(templateName)
     local newTemplate = deepcopy(template)
@@ -45,14 +73,18 @@ local function generateMulti(vehicleDir)
     end
     multiModTemplate.slotType = vehicleModSlot
     local templateNames = loadTemplateNames()
+    local addedEntries = {}
     for _,templateName in pairs(templateNames) do
         local convName = convertName(templateName)
         if multiModTemplate ~= nil and multiModTemplate.slots ~= nil and type(multiModTemplate.slots) == 'table' then
-            for _,slotType in pairs(getSlotTypes(multiModTemplate.slots)) do
-                table.insert(multiModTemplate.slots, {convName .. "_mod", "", templateName})
+            local entryKey = convName .. "_mod"
+            if not addedEntries[entryKey] then
+                table.insert(multiModTemplate.slots, {entryKey, "", templateName})
+                addedEntries[entryKey] = true
             end
         end
     end
+    multiModTemplate.slots = dedupeSlotRows(multiModTemplate.slots)
     local savePath = GENERATED_PATH:lower().."/vehicles/" .. vehicleDir .. "/modslot/" .. vehicleDir .. "_multimod.jbeam"
     makeAndSaveNewTemplate(vehicleDir, vehicleModSlot, multiModTemplate, "multimod")
 end

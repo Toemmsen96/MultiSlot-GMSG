@@ -27,12 +27,11 @@ local function makeAndSaveNewTemplate(vehicleDir, slotName, helperTemplate, temp
         --GMSGMessage("Error: templateCopy is nil", "Error", "error", 5000)
         return
     end
+    local convName = convertName(templateName)
     --make main part
     local mainPart = {}
     templateCopy.slotType = slotName
-    mainPart[vehicleDir .. "_" .. templateName] = templateCopy
-
-    local convName = convertName(templateName)
+    mainPart[vehicleDir .. "_" .. convName] = templateCopy
     
     --save it
     local savePath = tommot_modslotGenerator.getModSlotJbeamPath(vehicleDir, convName)

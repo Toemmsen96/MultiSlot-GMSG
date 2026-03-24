@@ -100,6 +100,34 @@ local function getSlotTypes(slotTable)
     return slotTypes
 end
 
+local function dedupeSlotRows(slotTable)
+    if type(slotTable) ~= 'table' then
+        return slotTable
+    end
+
+    local deduped = {}
+    local seen = {}
+
+    for i, row in ipairs(slotTable) do
+        -- Keep header rows untouched.
+        if i <= 2 then
+            table.insert(deduped, row)
+        elseif type(row) == 'table' then
+            local key = row[1]
+            if key == nil or not seen[key] then
+                table.insert(deduped, row)
+                if key ~= nil then
+                    seen[key] = true
+                end
+            end
+        else
+            table.insert(deduped, row)
+        end
+    end
+
+    return deduped
+end
+
 local function getModSlot(vehicleDir)
     local mainSlotData = loadMainSlot(vehicleDir)
     if mainSlotData ~= nil and mainSlotData.slots ~= nil and type(mainSlotData.slots) == 'table' then
@@ -130,7 +158,7 @@ local function getLicensePlateAdditionalMods()
         if jbeam then
             for partKey, part in pairs(jbeam) do
                 local hasLicensePlateSlot = false
-                if DET_DEBUG then log('D', 'getLicensePlateAdditionalMods', "Checking part: " .. partKey) end
+                --if DET_DEBUG then log('D', 'getLicensePlateAdditionalMods', "Checking part: " .. partKey) end
                 if part.slotType then
                     if type(part.slotType) == "string" and part.slotType == "licenseplate_design_2_1" then
                         if DET_DEBUG then log('D', 'getLicensePlateAdditionalMods', "Found license plate slot in " .. partKey) end
@@ -157,7 +185,15 @@ local function getLicensePlateAdditionalMods()
                     end
                     
                     -- Create additional license plate part
-                    local additionalPartKey = partKey .. "_additional_lp"
+                    if DET_DEBUG then log('D', 'getLicensePlateAdditionalMods', "Creating additional mod for: " .. partKey) end
+                    local additionalPartKey
+                    if not partKey:endswith("_additional_lp") then
+                        if DET_DEBUG then log('D', 'getLicensePlateAdditionalMods', "Part key does not end with _additional_lp, proceeding: " .. partKey) end
+                        additionalPartKey = partKey:lower() .. "_additional_lp"
+                    else
+                        if DET_DEBUG then log('D', 'getLicensePlateAdditionalMods', "Part key already ends with _additional_lp, skipping: " .. partKey) end
+                        additionalPartKey = partKey:lower()
+                    end
                     local modifiedContent = content
                     
                     -- Replace the slotType from licenseplate_design_2_1 to the new additional type
@@ -262,12 +298,10 @@ local function generateMultiWithAdditional(vehicleDir, additionalMods, licensePl
     for _,templateName in pairs(templateNames) do
         local convName = templateName:lower():gsub(" ", "_")
         if multiModTemplate ~= nil and multiModTemplate.slots ~= nil and type(multiModTemplate.slots) == 'table' then
-            for _,slotType in pairs(getSlotTypes(multiModTemplate.slots)) do
-                local entryKey = convName .. "_mod"
-                if not addedEntries[entryKey] then
-                    table.insert(multiModTemplate.slots, {entryKey, "", templateName})
-                    addedEntries[entryKey] = true
-                end
+            local entryKey = convName .. "_mod"
+            if not addedEntries[entryKey] then
+                table.insert(multiModTemplate.slots, {entryKey, "", templateName})
+                addedEntries[entryKey] = true
             end
         end
     end
@@ -293,6 +327,9 @@ local function generateMultiWithAdditional(vehicleDir, additionalMods, licensePl
             end
         end
     end
+
+    -- Final safety net: remove duplicate slot keys in the finished table.
+    multiModTemplate.slots = dedupeSlotRows(multiModTemplate.slots)
 
     -- Save the multi-mod template
     local savePath = gmsg.GENERATED_PATH:lower().."/vehicles/" .. vehicleDir .. "/modslot/" .. vehicleDir .. "_multimod.jbeam"

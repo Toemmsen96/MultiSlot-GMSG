@@ -65,12 +65,16 @@ end
 
 local function getTemplate()
     extensions.load("tommot_templates")
-    return gmsg_templates.loadTemplateNames()
+    local result = gmsg_templates.loadTemplateNames()
+    if result and #result > 0 then
+        return result
+    end
+    return nil
 end
 
 local templates = getTemplate()
 local selectedTemplate = nil
-if templates then 
+if templates and #templates > 0 then 
     selectedTemplate = templates[1]
 end 
 
@@ -104,17 +108,19 @@ local function render()
     
     if imgui.BeginTabBar("Tabs") then
         if imgui.BeginTabItem("Generate Standalone") then
-            if selectedTemplate == nil then
+            if selectedTemplate == nil or (templates == nil or #templates == 0) then
                 imgui.TextColored(imgui.ImVec4(1, 0, 0, 1), "No Templates found!")
                 imgui.TextColored(imgui.ImVec4(1, 0, 0, 1), "Please make sure you have downloaded or created at least one MultiSlot / GMSG Plugin")
                 imgui.TextColored(imgui.ImVec4(1, 0, 0, 1), "also ensure that the mod is loaded and the template is in the modslotgenerator folder")
-            elseif imgui.BeginCombo("Select Template", selectedTemplate) then
-                for _, template in ipairs(templates) do
-                    if imgui.Selectable1(template, template == selectedTemplate) then
-                        selectedTemplate = template
+            else
+                if imgui.BeginCombo("Select Template", selectedTemplate) then
+                    for _, template in ipairs(templates) do
+                        if imgui.Selectable1(template, template == selectedTemplate) then
+                            selectedTemplate = template
+                        end
                     end
+                    imgui.EndCombo()
                 end
-                imgui.EndCombo()
             end
             if imgui.IsItemHovered() then
                 imgui.SetTooltip("Select the Template you want to generate a Mod for. It needs to be saved in the mods-Folder under /unpacked/\"anything\"/modslotgenerator/\"Template-Name\".json")
@@ -130,9 +136,7 @@ local function render()
                 imgui.SetTooltip("Defines where the generated Mod will be saved relative to the mods-Folder in AppData (Default: /unpacked/gmsg_out/)")
             end
 
-            if imgui.Checkbox("autopackCheckbox", autopackCheckboxValue) then
-                autopackCheckboxValue[0] = not autopackCheckboxValue[0]
-            end
+            imgui.Checkbox("##autopackCheckbox", autopackCheckboxValue)
             if imgui.IsItemHovered() then
                 imgui.SetTooltip("Automatically packs the generated Mod into a .zip file, which will then be in the mods-Folder")
             end
@@ -347,6 +351,10 @@ local function render()
             if imgui.Button("Get Templates") then
                 templates = getTemplate()
                 gmsg_templates.getTemplateNames()
+                -- Update selectedTemplate if it's not set but templates are now available
+                if (selectedTemplate == nil or selectedTemplate == "") and templates and #templates > 0 then
+                    selectedTemplate = templates[1]
+                end
             end
             if imgui.IsItemHovered() then
                 imgui.SetTooltip("Reloads the Templates from the mods-Folder, updates the list in the UI and the Mod")
@@ -465,7 +473,10 @@ local function onUpdate(dtReal)
 end
 
 local function onExtensionLoaded()
-    getTemplate()
+    templates = getTemplate()
+    if templates and #templates > 0 and (selectedTemplate == nil or selectedTemplate == "") then
+        selectedTemplate = templates[1]
+    end
     loadSettings()
 end
 
