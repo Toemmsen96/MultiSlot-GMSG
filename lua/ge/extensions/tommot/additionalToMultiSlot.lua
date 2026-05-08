@@ -227,7 +227,7 @@ local function getLicensePlateAdditionalMods()
                     -- Create additional license plate part
                     if DET_DEBUG then log('D', 'getLicensePlateAdditionalMods', "Creating additional mod for: " .. partKey) end
                     local additionalPartKey
-                    if not partKey:endswith("_additional_lp") then
+                    if not ends_with(partKey, "_additional_lp") then
                         if DET_DEBUG then log('D', 'getLicensePlateAdditionalMods', "Part key does not end with _additional_lp, proceeding: " .. partKey) end
                         additionalPartKey = partKey:lower() .. "_additional_lp"
                     else

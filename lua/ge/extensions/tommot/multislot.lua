@@ -7,6 +7,8 @@ https://github.com/Toemmsen96/generalModSlotGenerator/
 
 local M = {}
 
+local TIMER_GENERATION = true
+
 local makeAndSaveNewTemplate = tommot_templates.makeAndSaveNewTemplate
 local getModSlot = tommot_modslotGenerator.getModSlot
 local getModSlotJbeamPath = tommot_modslotGenerator.getModSlotJbeamPath
@@ -55,7 +57,6 @@ end
 local function saveMultiTemplate(template, templateName)
     local convName = convertName(templateName)
     local newTemplate = deepcopy(template)
-    dump(convName)
     makeAndSaveNewTemplate("common", convName .. "_mod", newTemplate, templateName)
 end
 
@@ -63,7 +64,7 @@ end
 local function generateMulti(vehicleDir)
     local multiModTemplate = readJsonFile("/lua/ge/extensions/tommot/mSGTemplate.json")
     if multiModTemplate == nil then
-        logToConsole('E', 'generateMulti', "Failed to load multiModTemplate")
+        log('E', 'generateMulti', "Failed to load multiModTemplate")
         return
     end
     local vehicleModSlot = getModSlot(vehicleDir)
@@ -85,7 +86,6 @@ local function generateMulti(vehicleDir)
         end
     end
     multiModTemplate.slots = dedupeSlotRows(multiModTemplate.slots)
-    local savePath = GENERATED_PATH:lower().."/vehicles/" .. vehicleDir .. "/modslot/" .. vehicleDir .. "_multimod.jbeam"
     makeAndSaveNewTemplate(vehicleDir, vehicleModSlot, multiModTemplate, "multimod")
 end
 

@@ -29,6 +29,7 @@ local customOutputPath = nil
 local customOutputName = nil
 local isWaitingForAutoPack = false
 local isWaitingForPackAll = false
+local pendingFinishCount = 0
 local CONCURRENCY_DELAY = 1/100
 local TIMER_GENERATION = true
 local CACHE_GENERATED_MODS = true -- defines if generated mods are cached to speed up generation
@@ -403,6 +404,8 @@ end
 
 --generation stuff
 local function onFinishGen()
+    pendingFinishCount = pendingFinishCount - 1
+    if pendingFinishCount > 0 then return end
     core_modmanager.initDB()
     if AUTOPACK then
         isWaitingForPackAll = true
@@ -410,15 +413,20 @@ local function onFinishGen()
     end
 end
 
-local function generate(vehicleDir, templateName)
+local function generate(vehicleDir, templateName, tmpl)
     local convName = convertName(templateName)
-    local existingData = loadExistingModSlotData(vehicleDir,convName)
+    local existingData = loadExistingModSlotData(vehicleDir, convName)
     local existingVersion = template_module.findTemplateVersion(existingData)
     local vehicleModSlot = getModSlot(vehicleDir)
     if vehicleModSlot == nil then
         if DET_DEBUG then log('D', 'generate', vehicleDir .. " has no mod slot") end
         return
     end
+    if tmpl == nil then
+        tmpl = template_module.loadTemplate(templateName)
+        if tmpl == nil then return end
+    end
+    local tmplVersion = tmpl.version
     if DET_DEBUG then
         if existingData == nil then
             log('D', 'generate', "No existingData for " .. vehicleDir)
@@ -427,13 +435,13 @@ local function generate(vehicleDir, templateName)
         end
     end
 
-    if existingData ~= nil and existingVersion == templateVersion then
+    if existingData ~= nil and existingVersion == tmplVersion then
         if DET_DEBUG then log('D', 'generate', vehicleDir .. " up to date") end
         return
     else
         if DET_DEBUG then log('D', 'generate', vehicleDir .. " NOT up to date, updating") end
     end
-    template_module.makeAndSaveNewTemplate(vehicleDir, vehicleModSlot, template, convName)
+    template_module.makeAndSaveNewTemplate(vehicleDir, vehicleModSlot, tmpl, convName)
 end
 
 local function generateSpecific(vehicleDir, templateName, outputPath)
@@ -453,11 +461,15 @@ local function generateSpecific(vehicleDir, templateName, outputPath)
     template_module.makeAndSaveCustomTemplate(vehicleDir, vehicleModSlot, template, convName, outputPath)
 end
 
-local function generateAll(templateName)
+local function generateAll(templateName, tmpl)
     log('D', 'generateAll', "running generateAll() for template: " .. templateName)
+    tmpl = tmpl or template_module.loadTemplate(templateName)
+    if tmpl == nil then
+        log('E', 'generateAll', "Failed to load template: " .. templateName)
+        return
+    end
     for _,veh in pairs(getAllVehicles()) do
-        generate(veh, templateName)
-        --generate(veh, templateName)
+        generate(veh, templateName, tmpl)
     end
     log('D', 'generateAll', "done")
     onFinishGen()
@@ -465,10 +477,14 @@ end
 
 -- For concurrency with the job system
 local function generateAllJob(job, templateName)
-    local convName = convertName(templateName)
     log('D', 'generateAllJob', "running generateAll() for template: " .. templateName)
+    local tmpl = template_module.loadTemplate(templateName)
+    if tmpl == nil then
+        log('E', 'generateAllJob', "Failed to load template: " .. templateName)
+        return
+    end
     for _,veh in pairs(getAllVehicles()) do
-        generate(veh, convName)
+        generate(veh, templateName, tmpl)
         job.yield()
     end
     log('D', 'generateAllJob', templateName .. " done")
@@ -509,15 +525,16 @@ local function generateSeparateJob(job)
 end
 
 local function generateSeparateMods()
-	GMSGMessage("Generating separate mods", "Info", "info", 2000)
+    GMSGMessage("Generating separate mods", "Info", "info", 2000)
     local templateNames = template_module.loadTemplateNames()
+    if templateNames == nil then return end
     for _,name in pairs(templateNames) do
-        template_module.loadTemplate(name)
-        if template ~= nil then
-            generateAll(name)
+        local tmpl = template_module.loadTemplate(name)
+        if tmpl ~= nil then
+            generateAll(name, tmpl)
         end
     end
-	GMSGMessage("Done generating separate mods", "Info", "info", 2000)
+    GMSGMessage("Done generating separate mods", "Info", "info", 2000)
     onFinishGen()
 end
 
@@ -667,20 +684,24 @@ local function onExtensionLoaded() -- TODO: needs check if the Extension's alrea
     loadSettings()
     GMSGMessage("MultiSlot Generator Loaded, starting to generate.", "Info", "info", 3000)
     if tommot_templates.getTemplateNames() then
+        pendingFinishCount = 0
         if SEPARATE_MODS then
+            pendingFinishCount = pendingFinishCount + 1
             if USE_COROUTINES then core_jobsystem.create(generateSeparateJob, CONCURRENCY_DELAY) else generateSeparateMods() end
         end
         if MULTISLOT_MODS then
             if not extensions.isExtensionLoaded("tommot_multislot") then
                 extensions.load("tommot_multislot")
                 setExtensionUnloadMode("tommot_multislot", "manual")
-                multislot_module = tommot_multislot
             end
+            multislot_module = tommot_multislot
+            pendingFinishCount = pendingFinishCount + 1
             if USE_COROUTINES then core_jobsystem.create(tommot_multislot.generateMultiSlotJob, CONCURRENCY_DELAY) else multislot_module.generateMultiSlotMod() end
         end
         if ADDITIONAL_TO_MULTISLOT then
             extensions.load("tommot_additionalToMultiSlot")
             addtomulti_module = tommot_additionalToMultiSlot
+            pendingFinishCount = pendingFinishCount + 1
             if USE_COROUTINES then core_jobsystem.create(addtomulti_module.additionalToMultiSlotJob, CONCURRENCY_DELAY) else addtomulti_module.additionalToMultiSlot() end
         end
         if not SEPARATE_MODS and not MULTISLOT_MODS and not ADDITIONAL_TO_MULTISLOT then
@@ -770,18 +791,22 @@ local function onModDeactivated(mod)
             return
         end
         
-        extensions.unload("tommot_additionalToMultiSlot") -- unloads additionalToMultiSlot
-        extensions.unload("tommot_gmsgUI") -- unloads UI
-        extensions.unload("tommot_modslotGenerator") -- unloads this
+        extensions.unload("tommot_additionalToMultiSlot")
+        extensions.unload("tommot_multislot")
+        extensions.unload("tommot_templates")
+        extensions.unload("tommot_gmsgUI")
+        extensions.unload("tommot_modslotGenerator")
     end
 
 end
 
 local function onExit()
     log('D', 'onExit', "Exiting")
-    extensions.unload("tommot_additionalToMultiSlot") -- unloads additionalToMultiSlot
-    extensions.unload("tommot_gmsgUI") -- unloads UI
-    extensions.unload("tommot_modslotGenerator") -- unloads this
+    extensions.unload("tommot_additionalToMultiSlot")
+    extensions.unload("tommot_multislot")
+    extensions.unload("tommot_templates")
+    extensions.unload("tommot_gmsgUI")
+    extensions.unload("tommot_modslotGenerator")
     if CACHE_GENERATED_MODS then
         log('D', 'onExit', "Not deleting temp files due to cache setting")
         return

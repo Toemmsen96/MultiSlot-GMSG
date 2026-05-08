@@ -75,6 +75,8 @@ local function makeAndSaveNewTemplate(vehicleDir, slotName, helperTemplate, temp
     
     --save it with atomic operation
     local savePath = tommot_modslotGenerator.getModSlotJbeamPath(vehicleDir, convName)
+    local saveDir = savePath:match("^(.*)/[^/]+$")
+    if saveDir then FS:directoryCreate(saveDir, true) end
     local writeSuccess = writeFileAtomic(savePath, mainPart, true)
     if not writeSuccess then
         log('E', 'makeAndSaveNewTemplate', "Failed to save template to: " .. savePath)
