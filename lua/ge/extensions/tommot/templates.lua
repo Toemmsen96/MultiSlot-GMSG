@@ -11,12 +11,16 @@ local template = nil
 local templateVersion = -1
 local templateNames = nil
 
-local readJsonFile = tommot_modslotGenerator.readJsonFile
-local writeJsonFile = tommot_modslotGenerator.writeJsonFile
-local convertName = tommot_modslotGenerator.convertName
+local function getGenerator()
+    return tommot_modslotGenerator
+end
+
+local function readJsonFile(...) return getGenerator().readJsonFile(...) end
+local function writeJsonFile(...) return getGenerator().writeJsonFile(...) end
+local function convertName(...) return getGenerator().convertName(...) end
 
 local function GMSGMessage(msg, title, icon, duration)
-    tommot_modslotGenerator.GMSGMessage(msg, title, icon, duration)
+    getGenerator().GMSGMessage(msg, title, icon, duration)
 end
 
 local function writeFileAtomic(finalPath, data, compact)

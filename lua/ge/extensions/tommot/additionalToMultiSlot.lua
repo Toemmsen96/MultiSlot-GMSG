@@ -5,7 +5,7 @@
 
 local M = {}
 local DET_DEBUG = true
-local gmsg = tommot_modslotGenerator
+local function gmsg() return tommot_modslotGenerator end
 local templateNames = {}
 local additionalMods = {}
 
@@ -235,7 +235,7 @@ local function getLicensePlateAdditionalMods()
                         additionalPartKey = partKey:lower()
                     end
 
-                    local outputPath = gmsg.GENERATED_PATH:lower().."/vehicles/common/modslot/" .. additionalPartKey .. ".jbeam"
+                    local outputPath = gmsg().GENERATED_PATH:lower().."/vehicles/common/modslot/" .. additionalPartKey .. ".jbeam"
                     if FS:fileExists(outputPath) and readJsonFile(outputPath) ~= nil then
                         table.insert(additionalMods, {
                             partKey = additionalPartKey,
@@ -259,7 +259,7 @@ local function getLicensePlateAdditionalMods()
                     modifiedJbeam[partKey] = nil  -- Remove original entry
                     
                     -- Write using proper JSON serialization with atomic operation
-                    FS:directoryCreate(gmsg.GENERATED_PATH:lower().."/vehicles/common/modslot/", true)
+                    FS:directoryCreate(gmsg().GENERATED_PATH:lower().."/vehicles/common/modslot/", true)
                     
                     local writeSuccess = writeFileAtomic(outputPath, modifiedJbeam, true)
                     if not writeSuccess then
@@ -313,7 +313,7 @@ local function getAdditionalMods(vehicleDir)
                     
                     -- First, create a modified part key for our new additional part
                     local additionalPartKey = partKey .. "_additional"
-                    local outputPath = gmsg.GENERATED_PATH:lower().."/vehicles/" .. vehicleDir .. "/modslot/" .. partKey .. "_multislot.jbeam"
+                    local outputPath = gmsg().GENERATED_PATH:lower().."/vehicles/" .. vehicleDir .. "/modslot/" .. partKey .. "_multislot.jbeam"
                     if FS:fileExists(outputPath) and readJsonFile(outputPath) ~= nil then
                         table.insert(additionalMods, {
                             partKey = partKey,
@@ -337,7 +337,7 @@ local function getAdditionalMods(vehicleDir)
                     modifiedJbeam[partKey] = nil  -- Remove original entry
                     
                     -- Write using proper JSON serialization with atomic operation
-                    FS:directoryCreate(gmsg.GENERATED_PATH:lower().."/vehicles/" .. vehicleDir .. "/modslot/", true)
+                    FS:directoryCreate(gmsg().GENERATED_PATH:lower().."/vehicles/" .. vehicleDir .. "/modslot/", true)
                     
                     local writeSuccess = writeFileAtomic(outputPath, modifiedJbeam, true)
                     if not writeSuccess then
@@ -423,13 +423,13 @@ local function generateMultiWithAdditional(vehicleDir, additionalMods, licensePl
     multiModTemplate.slots = dedupeSlotRows(multiModTemplate.slots)
 
     -- Save the multi-mod template
-    local savePath = gmsg.GENERATED_PATH:lower().."/vehicles/" .. vehicleDir .. "/modslot/" .. vehicleDir .. "_multimod.jbeam"
+    local savePath = gmsg().GENERATED_PATH:lower().."/vehicles/" .. vehicleDir .. "/modslot/" .. vehicleDir .. "_multimod.jbeam"
     tommot_templates.makeAndSaveNewTemplate(vehicleDir, vehicleModSlot, multiModTemplate, "multimod")
 end
 
 local function additionalToMultiSlotJob(job)
-    gmsg.GMSGMessage("Generating combined MultiSlot", "Info", "info", 2000)
-    local vehicles = gmsg.getAllVehicles()
+    gmsg().GMSGMessage("Generating combined MultiSlot", "Info", "info", 2000)
+    local vehicles = gmsg().getAllVehicles()
     templateNames = tommot_templates.loadTemplateNames()
     local licensePlateAdditionalMods = getLicensePlateAdditionalMods()
     for _,vehicle in pairs(vehicles) do
@@ -437,21 +437,21 @@ local function additionalToMultiSlotJob(job)
         generateMultiWithAdditional(vehicle, additionalMods, licensePlateAdditionalMods)
         job.yield()
     end
-    gmsg.GMSGMessage("Finished generating combined MultiSlot", "Info", "info", 2000)
-    gmsg.onFinishGen()
+    gmsg().GMSGMessage("Finished generating combined MultiSlot", "Info", "info", 2000)
+    gmsg().onFinishGen()
 end
 
 local function additionalToMultiSlot()
-    gmsg.GMSGMessage("Generating combined MultiSlot", "Info", "info", 2000)
-    local vehicles = gmsg.getAllVehicles()
+    gmsg().GMSGMessage("Generating combined MultiSlot", "Info", "info", 2000)
+    local vehicles = gmsg().getAllVehicles()
     templateNames = tommot_templates.loadTemplateNames()
     local licensePlateAdditionalMods = getLicensePlateAdditionalMods()
     for _,vehicle in pairs(vehicles) do
         additionalMods = getAdditionalMods(vehicle)
         generateMultiWithAdditional(vehicle, additionalMods, licensePlateAdditionalMods)
     end
-    gmsg.GMSGMessage("Finished generating combined MultiSlot", "Info", "info", 2000)
-    gmsg.onFinishGen()
+    gmsg().GMSGMessage("Finished generating combined MultiSlot", "Info", "info", 2000)
+    gmsg().onFinishGen()
 end
 
 

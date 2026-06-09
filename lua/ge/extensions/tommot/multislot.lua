@@ -9,18 +9,18 @@ local M = {}
 
 local TIMER_GENERATION = true
 
-local makeAndSaveNewTemplate = tommot_templates.makeAndSaveNewTemplate
-local getModSlot = tommot_modslotGenerator.getModSlot
-local getModSlotJbeamPath = tommot_modslotGenerator.getModSlotJbeamPath
-local getSlotTypes = tommot_modslotGenerator.getSlotTypes
-local getAllVehicles = tommot_modslotGenerator.getAllVehicles
-local readJsonFile = tommot_modslotGenerator.readJsonFile
-local writeJsonFile = tommot_modslotGenerator.writeJsonFile
-local loadTemplateNames = tommot_templates.loadTemplateNames
-local loadTemplate = tommot_templates.loadTemplate
-local convertName = tommot_modslotGenerator.convertName
-local GENERATED_PATH = tommot_modslotGenerator.GENERATED_PATH
-local onFinishGen = tommot_modslotGenerator.onFinishGen
+local function makeAndSaveNewTemplate(...) return tommot_templates.makeAndSaveNewTemplate(...) end
+local function getModSlot(...) return tommot_modslotGenerator.getModSlot(...) end
+local function getModSlotJbeamPath(...) return tommot_modslotGenerator.getModSlotJbeamPath(...) end
+local function getSlotTypes(...) return tommot_modslotGenerator.getSlotTypes(...) end
+local function getAllVehicles(...) return tommot_modslotGenerator.getAllVehicles(...) end
+local function readJsonFile(...) return tommot_modslotGenerator.readJsonFile(...) end
+local function writeJsonFile(...) return tommot_modslotGenerator.writeJsonFile(...) end
+local function loadTemplateNames(...) return tommot_templates.loadTemplateNames(...) end
+local function loadTemplate(...) return tommot_templates.loadTemplate(...) end
+local function convertName(...) return tommot_modslotGenerator.convertName(...) end
+local function getGeneratedPath() return tommot_modslotGenerator.GENERATED_PATH end
+local function onFinishGen(...) return tommot_modslotGenerator.onFinishGen(...) end
 
 local function GMSGMessage(msg, title, icon, duration)
     tommot_modslotGenerator.GMSGMessage(msg, title, icon, duration)

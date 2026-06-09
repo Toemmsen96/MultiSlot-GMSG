@@ -8,7 +8,7 @@ M.showUI = false
 local imgui = ui_imgui
 local imguiUtils = require("/lua/common/extensions/ui/imguiUtils")
 local gmsg = tommot_modslotGenerator
-local gmsg_templates = tommot_templates
+local gmsg_templates = tommot_templates  -- nil until onExtensionLoaded calls getTemplate()
 local multislot = tommot_multislot
 local additionalToMultiSlot = tommot_additionalToMultiSlot
 local style = imgui.GetStyle()
@@ -65,6 +65,7 @@ end
 
 local function getTemplate()
     extensions.load("tommot_templates")
+    gmsg_templates = tommot_templates
     local result = gmsg_templates.loadTemplateNames()
     if result and #result > 0 then
         return result
@@ -72,11 +73,8 @@ local function getTemplate()
     return nil
 end
 
-local templates = getTemplate()
+local templates = nil
 local selectedTemplate = nil
-if templates and #templates > 0 then 
-    selectedTemplate = templates[1]
-end 
 
 local function toggleUI()
     M.showUI = not M.showUI
