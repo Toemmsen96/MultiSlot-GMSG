@@ -406,6 +406,14 @@ end
 local function onFinishGen()
     pendingFinishCount = pendingFinishCount - 1
     if pendingFinishCount > 0 then return end
+    -- Unmount generatedmodslot before initDB so the VFS re-scans the directory
+    -- and picks up any newly written jbeam files. Without this, files written to
+    -- an already-mounted directory are invisible until the next full restart.
+    local genPath = GENERATED_PATH:lower() .. "/"
+    if FS:isMounted(genPath) then
+        FS:unmount(genPath)
+        log('D', 'onFinishGen', "Unmounted " .. genPath .. " for remount")
+    end
     core_modmanager.initDB()
     if AUTOPACK then
         isWaitingForPackAll = true
@@ -776,11 +784,10 @@ local function onModDeactivated(mod)
             deleteTempFiles()
             return
         end
-        
+        extensions.unload("tommot_gmsgUI")
         extensions.unload("tommot_additionalToMultiSlot")
         extensions.unload("tommot_multislot")
         extensions.unload("tommot_templates")
-        extensions.unload("tommot_gmsgUI")
         extensions.unload("tommot_modslotGenerator")
     end
 
