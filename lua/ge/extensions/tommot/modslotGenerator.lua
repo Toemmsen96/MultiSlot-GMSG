@@ -706,6 +706,8 @@ local function onExtensionLoaded() -- TODO: needs check if the Extension's alrea
 
     extensions.load("tommot_gmsgUI") -- might need a check if it's already loaded
     setExtensionUnloadMode("tommot_gmsgUI", "manual")
+
+    extensions.load("tommot_multiSlotInjector")
 end
 
 local function onExtensionUnloaded()
