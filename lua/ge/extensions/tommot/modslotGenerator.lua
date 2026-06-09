@@ -472,22 +472,6 @@ local function generateAll(templateName, tmpl)
         generate(veh, templateName, tmpl)
     end
     log('D', 'generateAll', "done")
-    onFinishGen()
-end
-
--- For concurrency with the job system
-local function generateAllJob(job, templateName)
-    log('D', 'generateAllJob', "running generateAll() for template: " .. templateName)
-    local tmpl = template_module.loadTemplate(templateName)
-    if tmpl == nil then
-        log('E', 'generateAllJob', "Failed to load template: " .. templateName)
-        return
-    end
-    for _,veh in pairs(getAllVehicles()) do
-        generate(veh, templateName, tmpl)
-        job.yield()
-    end
-    log('D', 'generateAllJob', templateName .. " done")
 end
 local function generateAllSpecific(templateName, outputPath)
     log('D', 'generateAllSpecific', "running generateAllSpecific()")
@@ -502,25 +486,27 @@ end
 local function generateSeparateJob(job)
     local timer = nil
     local time = nil
-    if TIMER_GENERATION then 
+    if TIMER_GENERATION then
         log('D', 'generateSeparateJob', "Generating separate mods with timer: " .. os.time())
         timer = hptimer()
     end
     GMSGMessage("Generating separate mods", "Info", "info", 2000)
-	local templateNames = template_module.loadTemplateNames()
+    local templateNames = template_module.loadTemplateNames()
     for _,name in pairs(templateNames) do
-        local loaded_template = template_module.loadTemplate(name)
-        if loaded_template ~= nil then
-            core_jobsystem.create(function(j) generateAllJob(j, name) end, CONCURRENCY_DELAY)
-            job.yield()
+        local tmpl = template_module.loadTemplate(name)
+        if tmpl ~= nil then
+            for _,veh in pairs(getAllVehicles()) do
+                generate(veh, name, tmpl)
+                job.yield()
+            end
         end
     end
-    if TIMER_GENERATION then 
+    if TIMER_GENERATION then
         time = timer:stop()
         log('D', 'generateSeparateJob', "Done generating separate mods with timer: " .. time)
         GMSGMessage("Done generating separate mods with timer: " .. time, "Info", "info", 2000)
     end
-	GMSGMessage("Done generating separate mods", "Info", "info", 2000)
+    GMSGMessage("Done generating separate mods", "Info", "info", 2000)
     onFinishGen()
 end
 
