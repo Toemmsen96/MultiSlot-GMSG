@@ -28,6 +28,7 @@ local function loadSubModules()
     loadExt("tommot_lib_logger")
     loadExt("tommot_lib_fs")
     loadExt("tommot_lib_generator")
+    loadExt("tommot_lib_modman")
     loadExt("tommot_gmsg_settings")
     loadExt("tommot_gmsg_vehicles")
     loadExt("tommot_gmsg_templates")
@@ -205,8 +206,8 @@ local function onModDeactivated(mod)
     end
     for _, name in ipairs({"tommot_gmsg_ui","tommot_gmsg_additionalslots","tommot_gmsg_multislot",
                             "tommot_gmsg_templates","tommot_gmsg_vehicles","tommot_gmsg_settings",
-                            "tommot_gmsg_packer","tommot_lib_logger","tommot_lib_fs","tommot_lib_generator",
-                            "tommot_modslotGenerator"}) do
+                            "tommot_gmsg_packer","tommot_lib_modman","tommot_lib_logger",
+                            "tommot_lib_fs","tommot_lib_generator","tommot_modslotGenerator"}) do
         extensions.unload(name)
     end
 end
@@ -216,8 +217,8 @@ local function onExit()
     if packer_mod and not cfg().CACHE_GENERATED_MODS then packer_mod.deleteTempFiles() end
     for _, name in ipairs({"tommot_gmsg_ui","tommot_gmsg_additionalslots","tommot_gmsg_multislot",
                             "tommot_gmsg_templates","tommot_gmsg_vehicles","tommot_gmsg_settings",
-                            "tommot_gmsg_packer","tommot_lib_logger","tommot_lib_fs","tommot_lib_generator",
-                            "tommot_modslotGenerator"}) do
+                            "tommot_gmsg_packer","tommot_lib_modman","tommot_lib_logger",
+                            "tommot_lib_fs","tommot_lib_generator","tommot_modslotGenerator"}) do
         extensions.unload(name)
     end
 end
@@ -258,6 +259,7 @@ M.onFinishGen        = function()    if packer_mod then packer_mod.onFinishGen()
 M.getModSlotJbeamPath= function(...) if vehicles_mod then return vehicles_mod.getModSlotJbeamPath(...) end end
 M.getModSlot         = function(...) if vehicles_mod then return vehicles_mod.getModSlot(...) end end
 M.getSlotTypes       = function(...) if vehicles_mod then return vehicles_mod.getSlotTypes(...) end end
+M.isModInDB          = function(n)   if tommot_lib_modman then return tommot_lib_modman.isModInDB(n) end end
 
 -- Constant exposed for mods that read it directly
 M.GENERATED_PATH = "/mods/unpacked/generatedModSlot"
