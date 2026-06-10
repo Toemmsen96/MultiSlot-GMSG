@@ -1,861 +1,265 @@
 --[ Author: TommoT / Toemmsen
--- Description: This script is used to generate modslot jbeams for all vehicles in the game.
--- It uses a template files that are placed in /modslotgenerator/ to generate the Additional Modification mods and makes them selectable at once.
--- Don't inlcude this mod in your mod, add it as a requirement in you Modpage, as it prevents duplicate code.
+-- Entry point for the GMSG / MultiSlot Generator mod.
+-- Loads all sub-modules, orchestrates generation, and re-exports the public API
+-- for backwards compatibility with mods that depend on tommot_modslotGenerator.
 
 local M = {}
 
+-- Sub-module references (populated in loadSubModules)
+local settings_mod
+local template_mod
+local vehicles_mod
+local packer_mod
+local multislot_mod
+local addtomulti_mod
 
--- modules
-local template_module
-local multislot_module
-local addtomulti_module
+local function cfg() return tommot_gmsg_settings.cfg end
 
--- end modules
+-- ── Sub-module loader ─────────────────────────────────────────────────────────
 
-
--- settings
-local SEPARATE_MODS = false -- defines if templates generate separate mods for each vehicle
-local MULTISLOT_MODS = true -- defines if templates generate multi mods for each vehicle
-local ADDITIONAL_TO_MULTISLOT = false -- defines if additional mods are added to the multi mod
-local DET_DEBUG = false -- defines if debug messages are printed
-local LOGLEVEL = 2 -- 0 = no logs, 1 = info, 2 = debug
-local USE_COROUTINES = true -- defines if coroutines are used to generate mods
-local AUTO_APPLY_SETTINGS = false -- defines if settings are automatically applied on load
-local AUTOPACK = false -- defines if the mod should be autopacked
-local GENERATED_PATH = "/mods/unpacked/generatedModSlot"
-local SETTINGS_PATH = "/settings/GMSG_Settings.json"
-local customOutputPath = nil
-local customOutputName = nil
-local isWaitingForAutoPack = false
-local isWaitingForPackAll = false
-local pendingFinishCount = 0
-local CONCURRENCY_DELAY = 1/100
-local TIMER_GENERATION = true
-local CACHE_GENERATED_MODS = true -- defines if generated mods are cached to speed up generation
--- end constants
-
---helpers
-local queueHookJS
-if obj then
-  queueHookJS = function(...) obj:queueHookJS(...) end
-elseif be then
-  queueHookJS = function(...) be:queueHookJS(...) end
-end
-
-local function checkLogLevel(level)
-    if (level == 'D' or level == 'debug') and LOGLEVEL < 2 then
-        return false
-    end
-    if (level == 'I' or level == 'info') and LOGLEVEL < 1 then
-        return false
-    end
-    if (level == 'W' or level == 'warning') and LOGLEVEL < 1 then
-        return false
-    end
-    if level == 'E' then
-        return true
-    end
-    return true
-end
-
-local function logToConsole(level, func, message)
-
-    if checkLogLevel(level) then
-        log(level, func, message)
+local function loadExt(name)
+    if not extensions.isExtensionLoaded(name) then
+        extensions.load(name)
+        setExtensionUnloadMode(name, "manual")
     end
 end
 
-local function GMSGMessage(msg, title, type, timeOut)
-    if not queueHookJS then return end
-    if not checkLogLevel(type) then return end
-    local onTap = "function() { window.open('https://www.beamng.com/resources/general-modslot-generator-multislot.31265/') }"
-    local config = jsonEncode({
-      type = type or "warning",
-      title = title or "GMSG / MultiSlot Generator",
-      msg = msg or "",
-      config = {
-        timeOut = timeOut or 10000,
-        progressBar = true,
-        closeButton = true,
-  
-        -- default stuffs
-        positionClass = "toast-top-right",
-        preventDuplicates = true,
-        preventOpenDuplicates = true,
-  
-        onTap = "<REPLACETHIS>"
-      }
-    })
-    config = config:gsub("\"<REPLACETHIS>\"", onTap)
-  
-    queueHookJS("toastrMsg", "["..config.."]", 0)
+local function loadSubModules()
+    loadExt("tommot_lib_logger")
+    loadExt("tommot_lib_fs")
+    loadExt("tommot_lib_generator")
+    loadExt("tommot_gmsg_settings")
+    loadExt("tommot_gmsg_vehicles")
+    loadExt("tommot_gmsg_templates")
+    loadExt("tommot_gmsg_packer")
+
+    settings_mod = tommot_gmsg_settings
+    template_mod = tommot_gmsg_templates
+    vehicles_mod = tommot_gmsg_vehicles
+    packer_mod   = tommot_gmsg_packer
 end
 
-local function convertName(name)
-    return name:lower():gsub(" ", "_")
-end
-
-local function isEmptyOrWhitespace(str)
-    return str == nil or str:match("^%s*$") ~= nil
-end
-
-local function ends_with(str, ending)
-   return ending == "" or str:sub(-#ending) == ending
-end
-
-local function readJsonFile(path)
-    if isEmptyOrWhitespace(path) then
-        log('E', 'readJsonFile', "path is empty")
-        return nil
-    end
-    return jsonReadFile(path)
-end
-
-local function writeJsonFile(path, data, compact)
-    return jsonWriteFile(path, data, compact)
-end
-
-local function readJsonFileSafe(path)
-    if isEmptyOrWhitespace(path) then
-        log('E', 'readJsonFileSafe', "path is empty")
-        return nil
-    end
-    
-    if not FS:fileExists(path) then
-        log('E', 'readJsonFileSafe', "File does not exist: " .. path)
-        return nil
-    end
-    
-    local content = readFile(path)
-    if not content then
-        log('E', 'readJsonFileSafe', "Failed to read file: " .. path)
-        return nil
-    end
-    
-    local ok, data = pcall(json.decode, content)
-    if not ok then
-        log('E', 'readJsonFileSafe', "JSON decode error in " .. path .. ": " .. tostring(data))
-        return nil
-    end
-    
-    if type(data) ~= 'table' then
-        log('E', 'readJsonFileSafe', "Decoded JSON is not a table in: " .. path)
-        return nil
-    end
-    
-    return data
-end
-
-local function validateSlots(part, sourceFile)
-    if not part then return false end
-    if not part.slots and not part.slots2 then return true end
-    
-    local slots = part.slots or part.slots2
-    if type(slots) ~= 'table' then
-        log('E', 'validateSlots', "slots is not a table in " .. sourceFile .. ", partName: " .. tostring(part.partName))
-        return false
-    end
-    
-    if #slots == 0 then return true end
-    
-    -- Check for header in old slots format
-    if part.slots and type(slots[1]) == 'table' then
-        if slots[1][1] ~= "type" then
-            if DET_DEBUG then log('W', 'validateSlots', "slots missing header in " .. sourceFile .. ", adding default header") end
-            table.insert(slots, 1, {"type", "default", "description"})
-        end
-    end
-    
-    return true
-end
-
-local function validatePart(part, sourceFile)
-    if not part or type(part) ~= 'table' then
-        log('E', 'validatePart', "Part is not a valid table in: " .. sourceFile)
-        return false
-    end
-    
-    if not part.partName then
-        log('W', 'validatePart', "Part missing partName in: " .. sourceFile)
-    end
-    
-    if not part.slotType then
-        log('W', 'validatePart', "Part missing slotType in: " .. sourceFile .. ", partName: " .. tostring(part.partName))
-    end
-    
-    validateSlots(part, sourceFile)
-    
-    return true
-end
-
-local function getModNameFromPath(path) -- stolen from modmanager.lua lol, credits to BeamNG
-    local modname = string.lower(path)
-    modname = modname:gsub('dir:/', '') --should have been killed by now
-    modname = modname:gsub('/mods/', '')
-    modname = modname:gsub('repo/', '')
-    modname = modname:gsub('unpacked/', '')
-    modname = modname:gsub('/', '')
-    modname = modname:gsub('.zip$', '')
-    --log('I', 'getModNameFromPath', "getModNameFromPath path = "..path .."    name = "..dumps(modname) )
-    return modname
-end
--- end helpers
-
--- Editable settings
-local function sendSettingsToUI() -- Only for UI - App, not the imgui-UI
-    local data = {
-        SeparateMods = SEPARATE_MODS,
-        DetailedDebug = DET_DEBUG,
-        UseCoroutines = USE_COROUTINES,
-        AutoApplySettings = AUTO_APPLY_SETTINGS,
-        Autopack = AUTOPACK
-    }
-    guihooks.trigger('setModSettings', data)
-end
-
-local function loadSettings() -- Loads Settings from the file
-    local settings = readJsonFile(SETTINGS_PATH)
-    if settings == nil then
-        log('W', 'loadSettings', "Failed to find any saved settings, using defaults")
-        settings = readJsonFile("/lua/ge/extensions/tommot/GMSG_Settings.json")
-    end
-    if settings ~= nil then
-        SEPARATE_MODS = settings.SeparateMods
-        MULTISLOT_MODS = settings.MultiSlotMods
-        ADDITIONAL_TO_MULTISLOT = settings.AdditionalToMultiSlot
-        DET_DEBUG = settings.DetailedDebug
-        USE_COROUTINES = settings.UseCoroutines
-        AUTO_APPLY_SETTINGS = settings.AutoApplySettings
-        AUTOPACK = settings.Autopack
-        LOGLEVEL = settings.LogLevel
-        CACHE_GENERATED_MODS = settings.CacheGeneratedMods
-        GMSGMessage("Settings loaded: SeparateMods: " .. tostring(SEPARATE_MODS) .. " MultiSlot: " .. tostring(MULTISLOT_MODS) .." AdditionalToMS: " .. tostring(ADDITIONAL_TO_MULTISLOT) .. " DetailedDebug: " .. tostring(DET_DEBUG) .. " UseCoroutines: " .. tostring(USE_COROUTINES).." Autopack all: "..tostring(AUTOPACK) .. " CacheGeneratedMods: " .. tostring(CACHE_GENERATED_MODS), "Info", "info", 2000)
-        sendSettingsToUI()
-    end 
-    if settings == nil then
-        GMSGMessage("Failed to load settings, using defaults: SeparateMods: " .. tostring(SEPARATE_MODS) .. " DetailedDebug: " .. tostring(DET_DEBUG) .. " UseCoroutines: " .. tostring(USE_COROUTINES), "Warning", "warning", 2000)
-    end
-end
-
-local function saveSettings()
-    local settings = {
-        SeparateMods = SEPARATE_MODS,
-        MultiSlotMods = MULTISLOT_MODS,
-        AdditionalToMultiSlot = ADDITIONAL_TO_MULTISLOT,
-        DetailedDebug = DET_DEBUG,
-        UseCoroutines = USE_COROUTINES,
-        AutoApplySettings = AUTO_APPLY_SETTINGS,
-        Autopack = AUTOPACK,
-        LogLevel = LOGLEVEL,
-        CacheGeneratedMods = CACHE_GENERATED_MODS
-    }
-    writeJsonFile(SETTINGS_PATH, settings, true)
-    GMSGMessage("Settings saved: SeparateMods: " .. tostring(SEPARATE_MODS) .." MultiSlot: "..tostring(MULTISLOT_MODS) .. " DetailedDebug: " .. tostring(DET_DEBUG) .. " UseCoroutines: " .. tostring(USE_COROUTINES).." Autopack all: ".. tostring(AUTOPACK) .. " CacheGeneratedMods: " .. tostring(CACHE_GENERATED_MODS), "Info", "info", 2000)
-    sendSettingsToUI()
-end
-
-local function setModSettings(jsonData)
-    local data = json.decode(jsonData)
-    
-    if data.SeparateMods ~= nil then
-        SEPARATE_MODS = data.SeparateMods
-        logToConsole('D', 'setModSettings', "SeparateMods: " .. tostring(SEPARATE_MODS))
-    end
-    if data.DetailedDebug ~= nil then
-        DET_DEBUG = data.DetailedDebug
-        logToConsole('D', 'setModSettings', "DetailedDebug: " .. tostring(DET_DEBUG))
-    end
-    if data.UseCoroutines ~= nil then
-        USE_COROUTINES = data.UseCoroutines
-        logToConsole('D', 'setModSettings', "UseCoroutines: " .. tostring(USE_COROUTINES))
-    end
-    if data.AutoApplySettings ~= nil then
-        AUTO_APPLY_SETTINGS = data.AutoApplySettings
-        logToConsole('D', 'setModSettings', "AutoApplySettings: " .. tostring(AUTO_APPLY_SETTINGS))
-    end
-    if data.Autopack ~= nil then
-        AUTOPACK = data.Autopack
-        logToConsole('D', 'setModSettings', "Autopack: " .. tostring(AUTOPACK))
-    end
-    if data.MultiSlotMods ~= nil then
-        MULTISLOT_MODS = data.MultiSlotMods
-        logToConsole('D', 'setModSettings', "MultiSlotMods: " .. tostring(MULTISLOT_MODS))
-    end
-
-    if data.AdditionalToMultiSlot ~= nil then
-        ADDITIONAL_TO_MULTISLOT = data.AdditionalToMultiSlot
-        logToConsole('D', 'setModSettings', "AdditionalToMultiSlot: " .. tostring(ADDITIONAL_TO_MULTISLOT))
-    end
-
-    if data.LogLevel ~= nil then
-        LOGLEVEL = data.LogLevel
-        logToConsole('D', 'setModSettings', "LogLevel: " .. tostring(LOGLEVEL))
-    end
-    
-    saveSettings()
-end
-
-local function setConcurrencyDelay(delay)
-    if delay == nil then
-        log('E', 'setConcurrencyDelay', "delay is nil")
-        return
-    end
-    CONCURRENCY_DELAY = delay
-end
---end Editable Settings
-
-local function getAllVehicles()
-  local vehicles = {}
-  for _, v in ipairs(FS:findFiles('/vehicles', '*', 0, false, true)) do
-    if v ~= '/vehicles/common' then
-      table.insert(vehicles, string.match(v, '/vehicles/(.*)'))
-    end
-  end
-  return vehicles
-end
-
-local function getModSlotJbeamPath(vehicleDir, templateName)
-    local path = GENERATED_PATH:lower().."/vehicles/" .. vehicleDir .. "/modslot/" .. vehicleDir .. "_" .. templateName .. ".jbeam"
-    return path
-end
-
-local function loadExistingModSlotData(vehicleDir, templateName)
-    return readJsonFile(getModSlotJbeamPath(vehicleDir, templateName))
-end
-
---part helpers
-local function findMainPart(vehicleJbeam) 
-    if type(vehicleJbeam) ~= 'table' then return nil end
-    
-    for partKey, part in pairs(vehicleJbeam) do
-        -- is it valid?
-        if part.slotType == "main" then
-            return partKey
-        end
-    end
-    return nil
-end
-
-local function loadMainSlot(vehicleDir)
-    --first check if a file exists named vehicleDir.jbeam
-    local vehJbeamPath = "/vehicles/" .. vehicleDir .. "/" .. vehicleDir .. ".jbeam"
-    local vehicleJbeam = nil
-    
-    if FS:fileExists(vehJbeamPath) then
-        -- load it!
-        vehicleJbeam = readJsonFile(vehJbeamPath)
-        
-        -- is it valid?
-        local mainPartKey = findMainPart(vehicleJbeam)
-        if mainPartKey ~= nil then
-            return vehicleJbeam[mainPartKey]
-        end
-    end
-    
-    --if it wasn't valid, look through all files in this vehicle dir
-    local files = FS:findFiles("/vehicles/" .. vehicleDir, "*.jbeam", -1, true, false)
-    for _, file in ipairs(files) do
-        -- load it!
-        vehicleJbeam = readJsonFile(file)
-        
-        -- is it valid?
-        local mainPartKey = findMainPart(vehicleJbeam)
-        if mainPartKey ~= nil then
-            return vehicleJbeam[mainPartKey]
-        end
-    end
-    if DET_DEBUG then log('W', 'loadMainSlot', "No main slot found for " .. vehicleDir) end
-    --if all else fails, return nil
-    return nil
-end
-
-local function getSlotTypes(slotTable)
-    local slotTypes = {}
-    for i, slot in pairs(slotTable) do
-        if i > 1 then
-            local slotType = slot[1]
-            table.insert(slotTypes, slotType)
-        end
-    end
-    return slotTypes
-end
-
-local function getModSlot(vehicleDir)
-    local mainSlotData = loadMainSlot(vehicleDir)
-    if mainSlotData ~= nil and mainSlotData.slots ~= nil and type(mainSlotData.slots) == 'table' then
-        for _,slotType in pairs(getSlotTypes(mainSlotData.slots)) do
-            if ends_with(slotType, "_mod") then
-                return slotType
-            end
-        end
-    end
-
-    --if that didn't work, try for slots2, which is used in some vehicles, and a newer format
-    if mainSlotData ~= nil and mainSlotData.slots2 ~= nil and type(mainSlotData.slots2) == 'table' then
-        for _,slotType in pairs(getSlotTypes(mainSlotData.slots2)) do
-            if ends_with(slotType, "_mod") then
-                return slotType
-            end
-        end
-    end
-    return nil
-end
-
---generation stuff
-local function onFinishGen()
-    pendingFinishCount = pendingFinishCount - 1
-    if pendingFinishCount > 0 then return end
-    -- Unmount generatedmodslot before initDB so the VFS re-scans the directory
-    -- and picks up any newly written jbeam files. Without this, files written to
-    -- an already-mounted directory are invisible until the next full restart.
-    local genPath = GENERATED_PATH:lower() .. "/"
-    if FS:isMounted(genPath) then
-        FS:unmount(genPath)
-        log('D', 'onFinishGen', "Unmounted " .. genPath .. " for remount")
-    end
-    core_modmanager.initDB()
-    if AUTOPACK then
-        isWaitingForPackAll = true
-        logToConsole('W', 'onExtensionLoaded', "Queued for Autopack")
-    end
-end
+-- ── Core generation (stays here — orchestrates templates + vehicles) ───────────
 
 local function generate(vehicleDir, templateName, tmpl)
-    local convName = convertName(templateName)
-    local existingData = loadExistingModSlotData(vehicleDir, convName)
-    local existingVersion = template_module.findTemplateVersion(existingData)
-    local vehicleModSlot = getModSlot(vehicleDir)
-    if vehicleModSlot == nil then
-        if DET_DEBUG then log('D', 'generate', vehicleDir .. " has no mod slot") end
-        return
-    end
+    local convName = tommot_lib_generator.convertName(templateName)
+    local existingData    = vehicles_mod.loadExistingModSlotData(vehicleDir, convName)
+    local existingVersion = template_mod.findTemplateVersion(existingData)
+    local vehicleModSlot  = vehicles_mod.getModSlot(vehicleDir)
+    if vehicleModSlot == nil then return end
     if tmpl == nil then
-        tmpl = template_module.loadTemplate(templateName)
+        tmpl = template_mod.loadTemplate(templateName)
         if tmpl == nil then return end
     end
-    local tmplVersion = tmpl.version
-    if DET_DEBUG then
-        if existingData == nil then
-            log('D', 'generate', "No existingData for " .. vehicleDir)
-        else
-            log('D', 'generate', "Loaded existing Version: " .. tostring(existingVersion) .. " for " .. vehicleDir)
-        end
-    end
-
-    if existingData ~= nil and existingVersion == tmplVersion then
-        if DET_DEBUG then log('D', 'generate', vehicleDir .. " up to date") end
-        return
-    else
-        if DET_DEBUG then log('D', 'generate', vehicleDir .. " NOT up to date, updating") end
-    end
-    template_module.makeAndSaveNewTemplate(vehicleDir, vehicleModSlot, tmpl, convName)
-end
-
-local function generateSpecific(vehicleDir, templateName, outputPath)
-    local template = template_module.loadTemplate(templateName)
-    local convName = convertName(templateName)
-    local vehicleModSlot = getModSlot(vehicleDir)
-    if template == nil then
-        log('E', 'generateSpecific', "Failed to load template: " .. templateName)
-        GMSGMessage("Failed to load template: " .. templateName, "Error", "error", 5000)
-        return
-    end
-    if vehicleModSlot == nil then
-        log('D', 'generateSpecific', vehicleDir .. " has no mod slot")
-        return
-    end
-    log('D', 'generateSpecific', "Generating specific mod: " .. vehicleDir .. " " .. convName .. " " .. outputPath)
-    template_module.makeAndSaveCustomTemplate(vehicleDir, vehicleModSlot, template, convName, outputPath)
+    if existingData ~= nil and existingVersion == tmpl.version then return end
+    template_mod.makeAndSaveNewTemplate(vehicleDir, vehicleModSlot, tmpl, convName)
 end
 
 local function generateAll(templateName, tmpl)
-    log('D', 'generateAll', "running generateAll() for template: " .. templateName)
-    tmpl = tmpl or template_module.loadTemplate(templateName)
-    if tmpl == nil then
-        log('E', 'generateAll', "Failed to load template: " .. templateName)
-        return
-    end
-    for _,veh in pairs(getAllVehicles()) do
+    tmpl = tmpl or template_mod.loadTemplate(templateName)
+    if tmpl == nil then return end
+    for _, veh in pairs(vehicles_mod.getAllVehicles()) do
         generate(veh, templateName, tmpl)
     end
-    log('D', 'generateAll', "done")
 end
+
 local function generateAllSpecific(templateName, outputPath)
-    log('D', 'generateAllSpecific', "running generateAllSpecific()")
-    local convName = convertName(templateName)
-    for _,veh in pairs(getAllVehicles()) do
-        generateSpecific(veh, templateName, outputPath)
+    local convName = tommot_lib_generator.convertName(templateName)
+    for _, veh in pairs(vehicles_mod.getAllVehicles()) do
+        local vehicleModSlot = vehicles_mod.getModSlot(veh)
+        if vehicleModSlot then
+            local tmpl = template_mod.loadTemplate(templateName)
+            if tmpl then template_mod.makeAndSaveCustomTemplate(veh, vehicleModSlot, tmpl, convName, outputPath) end
+        end
     end
-	GMSGMessage("Done generating all mods for template: " .. templateName.."\n and path: " .. outputPath, "Info", "info", 2000)
-    log('D', 'generateAllSpecific', "done")
+    tommot_lib_logger.GMSGMessage("Done generating mods for: " .. templateName, "Info", "info", 2000)
 end
 
 local function generateSeparateJob(job)
-    local timer = nil
-    local time = nil
-    if TIMER_GENERATION then
-        log('D', 'generateSeparateJob', "Generating separate mods with timer: " .. os.time())
-        timer = hptimer()
-    end
-    GMSGMessage("Generating separate mods", "Info", "info", 2000)
-    local templateNames = template_module.loadTemplateNames()
-    for _,name in pairs(templateNames) do
-        local tmpl = template_module.loadTemplate(name)
-        if tmpl ~= nil then
-            for _,veh in pairs(getAllVehicles()) do
-                generate(veh, name, tmpl)
-                job.yield()
+    local timer = cfg().TIMER_GENERATION and hptimer() or nil
+    tommot_lib_logger.GMSGMessage("Generating separate mods", "Info", "info", 2000)
+    local templateNames = template_mod.loadTemplateNames()
+    if templateNames then
+        for _, name in pairs(templateNames) do
+            local tmpl = template_mod.loadTemplate(name)
+            if tmpl then
+                for _, veh in pairs(vehicles_mod.getAllVehicles()) do
+                    generate(veh, name, tmpl)
+                    job.yield()
+                end
             end
         end
     end
-    if TIMER_GENERATION then
-        time = timer:stop()
-        log('D', 'generateSeparateJob', "Done generating separate mods with timer: " .. time)
-        GMSGMessage("Done generating separate mods with timer: " .. time, "Info", "info", 2000)
-    end
-    GMSGMessage("Done generating separate mods", "Info", "info", 2000)
-    onFinishGen()
+    if timer then tommot_lib_logger.GMSGMessage("Done separate mods (timer: " .. timer:stop() .. ")", "Info", "info", 2000) end
+    tommot_lib_logger.GMSGMessage("Done generating separate mods", "Info", "info", 2000)
+    packer_mod.onFinishGen()
 end
 
 local function generateSeparateMods()
-    GMSGMessage("Generating separate mods", "Info", "info", 2000)
-    local templateNames = template_module.loadTemplateNames()
+    tommot_lib_logger.GMSGMessage("Generating separate mods", "Info", "info", 2000)
+    local templateNames = template_mod.loadTemplateNames()
     if templateNames == nil then return end
-    for _,name in pairs(templateNames) do
-        local tmpl = template_module.loadTemplate(name)
-        if tmpl ~= nil then
-            generateAll(name, tmpl)
-        end
+    for _, name in pairs(templateNames) do
+        local tmpl = template_mod.loadTemplate(name)
+        if tmpl then generateAll(name, tmpl) end
     end
-    GMSGMessage("Done generating separate mods", "Info", "info", 2000)
-    onFinishGen()
+    tommot_lib_logger.GMSGMessage("Done generating separate mods", "Info", "info", 2000)
+    packer_mod.onFinishGen()
 end
 
-local function generateSpecificMod(templatePath, templateName, outputPath, autoPack,addDependencyDownloader, includeMStemplate)
-    if isEmptyOrWhitespace(templatePath) then
-        log('E', 'generateSpecificMod', "templatePath is empty")
-        GMSGMessage("Error: templatePath is empty", "Error", "error", 5000)
+local function generateSpecificMod(templatePath, templateName, outputPath, autoPack, addDependencyDownloader, includeMStemplate)
+    local fs = tommot_lib_fs
+    if fs.isEmptyOrWhitespace(templatePath) or fs.isEmptyOrWhitespace(templateName) or fs.isEmptyOrWhitespace(outputPath) then
+        tommot_lib_logger.GMSGMessage("Error: invalid arguments to generateSpecificMod", "Error", "error", 5000)
         return
     end
-    if isEmptyOrWhitespace(templateName) then
-        log('E', 'generateSpecificMod', "templateName is empty")
-        GMSGMessage("Error: templateName is empty", "Error", "error", 5000)
-        return
-    end
-    if isEmptyOrWhitespace(outputPath) then
-        log('E', 'generateSpecificMod', "outputPath is empty")
-        GMSGMessage("Error: outputPath is empty", "Error", "error", 5000)
-        return
-    end
-    if autoPack == nil then
-        autoPack = AUTOPACK
-    end
-    if includeMStemplate == nil then
-        includeMStemplate = false
-    end
+    autoPack = autoPack ~= nil and autoPack or cfg().AUTOPACK
+    addDependencyDownloader = addDependencyDownloader or false
+    includeMStemplate       = includeMStemplate or false
 
-    if addDependencyDownloader == nil then
-        addDependencyDownloader = false
-    end
-
-    local template = readJsonFile(templatePath)
-    if template ~= nil then
-        templateVersion = template.version
-        log('D', 'generateSpecificMod', "Loaded Template-version: " .. templateVersion)
-    end
+    local template = fs.readJsonFile(templatePath) or template_mod.loadTemplate(templateName)
     if template == nil then
-        log('W', 'generateSpecificMod', "Failed to load template from path: " .. templatePath)
-        template = template_module.loadTemplate(templateName)
-        if template == nil then
-            log('E', 'generateSpecificMod', "Failed to load template: " .. templateName)
-            GMSGMessage("Failed to load template: " .. templateName, "Error", "error", 5000)
-            return
-        end
+        tommot_lib_logger.GMSGMessage("Failed to load template: " .. templateName, "Error", "error", 5000)
+        return
     end
-    log('D', 'generateSpecificMod', "Generating specific mod: " .. templatePath)
-    GMSGMessage("Generating specific mod: " .. templatePath, "Info", "info", 2000)
-    if template ~= nil then
-        generateAllSpecific(templateName, outputPath)
-    end
+
+    tommot_lib_logger.GMSGMessage("Generating mod: " .. templateName, "Info", "info", 2000)
+    generateAllSpecific(templateName, outputPath)
 
     if addDependencyDownloader then
-        log('D', 'generateSpecificMod', "Adding dependency downloader files")
-        -- Copy files maintaining folder structure
-        local depDownloaderPath = "/ModSlotGeneratorExampleTemplates/depDownloader"
-        depDownloaderPath = depDownloaderPath:lower() -- Ensure path is lowercase for consistency
-        local depDownloaderFiles = FS:findFiles(depDownloaderPath, "*", -1, true, false)
-        for _, file in ipairs(depDownloaderFiles) do
-            -- Get relative path by removing the base path
-            local relativePath = file:sub(#depDownloaderPath + 2) -- +2 to remove leading /
-            local targetPath = "mods/" .. outputPath .. "/" .. relativePath
-            
-            log('D', 'generateSpecificMod', "Copying file: " .. file .. " to " .. targetPath)
-            
-            -- Read file content
-            local fileHandle = io.open(file, "r")
-            if fileHandle then
-                local content = fileHandle:read("*all")
-                fileHandle:close()
-                
-                -- Create directory structure
-                local dir = targetPath:match("(.*[/\\])")
-                if dir then
-                    FS:directoryCreate(dir, true)
-                end
-                
-                -- Write content to new location
-                local outHandle = io.open(targetPath, "w")
-                if outHandle then
-                    outHandle:write(content)
-                    outHandle:close()
-                else
-                    log('E', 'generateSpecificMod', "Failed to write to " .. targetPath)
-                end
-            else
-                log('E', 'generateSpecificMod', "Failed to read from " .. file)
-            end
-        end
-        log('D', 'generateSpecificMod', "Done adding dependency downloader files")
+        local depPath = "/modslotgeneratorexampletemplates/depdownloader"
+        tommot_lib_generator.copyFileTree(depPath, "mods/" .. outputPath)
     end
-
-
 
     if includeMStemplate then
-        -- TODO: Copy the template to "outputPath/modslotgenerator/templateName.json"
-        local templateCopy = deepcopy(template)
-        local success = false
-        if ends_with(outputPath,"/") then
-        log('D', 'generateSpecificMod', "Copying template to: /mods" .. outputPath .. "modslotgenerator/" .. templateName .. ".json")
-        writeJsonFile("/mods"..outputPath .. "modslotgenerator/" .. templateName .. ".json", templateCopy, true)
-        else
-            log('D', 'generateSpecificMod', "Copying template to: /mods" .. outputPath .. "/modslotgenerator/" .. templateName .. ".json")
-            writeJsonFile("/mods"..outputPath .. "/modslotgenerator/" .. templateName .. ".json", templateCopy, true)
-        end
+        local dest = "/mods" .. outputPath .. (fs.ends_with(outputPath, "/") and "" or "/") .. "modslotgenerator/" .. templateName .. ".json"
+        fs.writeJsonFile(dest, deepcopy(template), true)
     end
+
     if autoPack then
-        GMSGMessage("Autopacking generated mod", "Info", "info", 2000)
-        customOutputPath = outputPath
-        customOutputName = getModNameFromPath(outputPath)
-        log('D', 'generateSpecificMod', "Queued "..customOutputName.." for Autopack with path:\n"..customOutputPath)
-        core_modmanager.initDB()
-        isWaitingForAutoPack = true
+        tommot_lib_logger.GMSGMessage("Autopacking...", "Info", "info", 2000)
+        packer_mod.queueCustomPack(outputPath)
     end
 end
 
-local function isModInDB(nameToCheck)
-    logToConsole('D', 'checkForModName', "Checking for mod: " .. nameToCheck)
-    if not nameToCheck then return false end
-    
-    nameToCheck = nameToCheck:lower()
-    local mods = core_modmanager.getMods()
-    
-    if not mods then
-        logToConsole('E', 'checkForModName', "Failed to get mods list")
-        return false
-    end
-    
-    -- Iterate through mods table using pairs instead of ipairs
-    for modId, mod in pairs(mods) do
-        if mod and mod.modname and mod.modname:lower() == nameToCheck then
-            logToConsole('D', 'checkForModName', "Found mod: " .. mod.modname)
-            return true
-        end
-    end
-    return false
-end
+-- ── Lifecycle ──────────────────────────────────────────────────────────────────
 
-local function onExtensionLoaded() -- TODO: needs check if the Extension's already running. Otherwise modScript reruns this
-    setExtensionUnloadMode(M, "manual") -- ensure manual unloading if not already set
-    extensions.load("tommot_templates")
-    setExtensionUnloadMode("tommot_templates", "manual")
-    template_module = tommot_templates
-    if extensions.isExtensionLoaded("tommot_gmsgUI") then 
-        logToConsole('W', 'onExtensionLoaded', "Already loaded, returning.")
+local function onExtensionLoaded()
+    setExtensionUnloadMode(M, "manual")
+    loadSubModules()
+
+    if extensions.isExtensionLoaded("tommot_gmsg_ui") then
+        tommot_lib_logger.logToConsole('W', 'onExtensionLoaded', "Already loaded, returning.")
         return
     end
-    log('D', 'onExtensionLoaded', "Mods/TommoT ModSlot Generator Loaded")
-    loadSettings()
-    GMSGMessage("MultiSlot Generator Loaded, starting to generate.", "Info", "info", 3000)
-    if tommot_templates.getTemplateNames() then
-        pendingFinishCount = 0
-        if SEPARATE_MODS then
-            pendingFinishCount = pendingFinishCount + 1
-            if USE_COROUTINES then core_jobsystem.create(generateSeparateJob, CONCURRENCY_DELAY) else generateSeparateMods() end
+
+    log('D', 'onExtensionLoaded', "GMSG ModSlot Generator Loaded")
+    settings_mod.loadSettings()
+    tommot_lib_logger.GMSGMessage("MultiSlot Generator Loaded, starting generation.", "Info", "info", 3000)
+
+    if template_mod.getTemplateNames() then
+        packer_mod.resetPending()
+        local c = cfg()
+        if c.SEPARATE_MODS then
+            packer_mod.incrementPending()
+            if c.USE_COROUTINES then core_jobsystem.create(generateSeparateJob, c.CONCURRENCY_DELAY) else generateSeparateMods() end
         end
-        if MULTISLOT_MODS then
-            if not extensions.isExtensionLoaded("tommot_multislot") then
-                extensions.load("tommot_multislot")
-                setExtensionUnloadMode("tommot_multislot", "manual")
-            end
-            multislot_module = tommot_multislot
-            pendingFinishCount = pendingFinishCount + 1
-            if USE_COROUTINES then core_jobsystem.create(tommot_multislot.generateMultiSlotJob, CONCURRENCY_DELAY) else multislot_module.generateMultiSlotMod() end
+        if c.MULTISLOT_MODS then
+            loadExt("tommot_gmsg_multislot")
+            multislot_mod = tommot_gmsg_multislot
+            packer_mod.incrementPending()
+            if c.USE_COROUTINES then core_jobsystem.create(multislot_mod.generateMultiSlotJob, c.CONCURRENCY_DELAY) else multislot_mod.generateMultiSlotMod() end
         end
-        if ADDITIONAL_TO_MULTISLOT then
-            extensions.load("tommot_additionalToMultiSlot")
-            addtomulti_module = tommot_additionalToMultiSlot
-            pendingFinishCount = pendingFinishCount + 1
-            if USE_COROUTINES then core_jobsystem.create(addtomulti_module.additionalToMultiSlotJob, CONCURRENCY_DELAY) else addtomulti_module.additionalToMultiSlot() end
+        if c.ADDITIONAL_TO_MULTISLOT then
+            loadExt("tommot_gmsg_additionalslots")
+            addtomulti_mod = tommot_gmsg_additionalslots
+            packer_mod.incrementPending()
+            if c.USE_COROUTINES then core_jobsystem.create(addtomulti_mod.additionalToMultiSlotJob, c.CONCURRENCY_DELAY) else addtomulti_mod.additionalToMultiSlot() end
         end
-        if not SEPARATE_MODS and not MULTISLOT_MODS and not ADDITIONAL_TO_MULTISLOT then
-            GMSGMessage("No generation method selected", "Warning", "warning", 5000)
+        if not c.SEPARATE_MODS and not c.MULTISLOT_MODS and not c.ADDITIONAL_TO_MULTISLOT then
+            tommot_lib_logger.GMSGMessage("No generation method selected", "Warning", "warning", 5000)
         end
-		GMSGMessage("Done generating all mods", "Info", "info", 4000)
+        tommot_lib_logger.GMSGMessage("Done generating all mods", "Info", "info", 4000)
     end
 
-    extensions.load("tommot_gmsgUI") -- might need a check if it's already loaded
-    setExtensionUnloadMode("tommot_gmsgUI", "manual")
-
-    extensions.load("tommot_multiSlotInjector")
+    loadExt("tommot_gmsg_ui")
+    loadExt("tommot_multiSlotInjector")
 end
 
 local function onExtensionUnloaded()
-    log('D', 'onExtensionUnloaded', "Mods/TommoT ModSlot Generator Unloaded")
-    -- deleteTempFiles()
-    -- extensions.unload("tommot_additionalToMultiSlot")
-    -- extensions.unload("tommot_gmsgUI")
-
-    -- Needs some sort of check to unload the other modules if they're not needed anymore
+    log('D', 'onExtensionUnloaded', "GMSG ModSlot Generator Unloaded")
 end
-
-
 
 local function onGuiUpdate()
-    if isWaitingForAutoPack and customOutputPath ~= nil then
-        if isModInDB(customOutputName) then
-            logToConsole('D', 'Autopack', "Packing mod: /mods" .. customOutputPath:lower())
-            core_modmanager.packMod("/mods"..customOutputPath:lower())
-            isWaitingForAutoPack = false
-        end 
-    end
-    if isWaitingForPackAll then
-        if core_modmanager.modIsUnpacked("generatedmodslot") then -- TODO: FIX loop
-    --    if isModInDB("generatedmodslot") then
-            logToConsole('D', 'Autopack', "Packing generatedModSlot")
-            isWaitingForPackAll = false
-            core_modmanager.packMod(GENERATED_PATH:lower())
-        end
-    end
-
-end
-
--- probably make this into a function to be called if wanted, so its not always removing all files on gameexit
-local function deleteTempFiles()
-    --delete all files in /mods/unpacked/generatedModSlot
-    log('W', 'deleteTempFiles', "Deleting all files in /mods/unpacked/generatedModSlot")
-    GMSGMessage("Deleting all files in /mods/unpacked/generatedModSlot", "Info", "info", 2000)
-    
-    -- Delete files in GENERATED_PATH
-    local files = FS:findFiles(GENERATED_PATH, "*", -1, true, false)
-    for _, file in ipairs(files) do
-        if DET_DEBUG then log('D', 'deleteTempFiles', "Deleting file: " .. file) end
-        FS:removeFile(file)
-    end
-
-    -- Delete files in lowercase path
-    local filesLower = FS:findFiles(GENERATED_PATH:lower(), "*", -1, true, false)
-    for _, file in ipairs(filesLower) do
-        if DET_DEBUG then log('D', 'deleteTempFiles', "Deleting file: " .. file) end 
-        FS:removeFile(file)
-    end
-
-    -- Delete packed Zip
-    core_modmanager.deleteMod("generatedmodslot")
-
-    log('W', 'deleteTempFiles', "Done")
-    GMSGMessage("Done", "Info", "info", 2000)
+    if packer_mod then packer_mod.pollPack() end
 end
 
 local function onModDeactivated(mod)
-    -- Check if mod is one of the mods connected to this script
-    local validMods = {
-        ["generatedmodslot"] = true,
-        ["generalmodslotgenerator"] = true,
-        ["tommot_gmsg"] = true
-    }
-    if mod == nil then
-        log('E', 'onModDeactivated', "mod is nil")
+    if mod == nil then log('E', 'onModDeactivated', "mod is nil") return end
+    local validMods = {["generatedmodslot"] = true, ["generalmodslotgenerator"] = true, ["tommot_gmsg"] = true}
+    if not validMods[mod.modname] then return end
+    tommot_lib_logger.GMSGMessage("Unloading mod: " .. mod.modname, "Info", "info", 2000)
+    if packer_mod and not cfg().CACHE_GENERATED_MODS then
+        packer_mod.deleteTempFiles()
         return
     end
-    if validMods[mod.modname] then
-        log('D', 'onModDeactivated', "Unloading mod: " .. mod.modname)
-        GMSGMessage("Unloading mod: " .. mod.modname, "Info", "info", 2000)
-        if not CACHE_GENERATED_MODS then
-            log('D', 'onExit', "Deleting temp files due to cache setting")
-            deleteTempFiles()
-            return
-        end
-        extensions.unload("tommot_gmsgUI")
-        extensions.unload("tommot_additionalToMultiSlot")
-        extensions.unload("tommot_multislot")
-        extensions.unload("tommot_templates")
-        extensions.unload("tommot_modslotGenerator")
+    for _, name in ipairs({"tommot_gmsg_ui","tommot_gmsg_additionalslots","tommot_gmsg_multislot",
+                            "tommot_gmsg_templates","tommot_gmsg_vehicles","tommot_gmsg_settings",
+                            "tommot_gmsg_packer","tommot_lib_logger","tommot_lib_fs","tommot_lib_generator",
+                            "tommot_modslotGenerator"}) do
+        extensions.unload(name)
     end
-
 end
 
 local function onExit()
     log('D', 'onExit', "Exiting")
-    extensions.unload("tommot_additionalToMultiSlot")
-    extensions.unload("tommot_multislot")
-    extensions.unload("tommot_templates")
-    extensions.unload("tommot_gmsgUI")
-    extensions.unload("tommot_modslotGenerator")
-    if CACHE_GENERATED_MODS then
-        log('D', 'onExit', "Not deleting temp files due to cache setting")
-        return
+    if packer_mod and not cfg().CACHE_GENERATED_MODS then packer_mod.deleteTempFiles() end
+    for _, name in ipairs({"tommot_gmsg_ui","tommot_gmsg_additionalslots","tommot_gmsg_multislot",
+                            "tommot_gmsg_templates","tommot_gmsg_vehicles","tommot_gmsg_settings",
+                            "tommot_gmsg_packer","tommot_lib_logger","tommot_lib_fs","tommot_lib_generator",
+                            "tommot_modslotGenerator"}) do
+        extensions.unload(name)
     end
-    deleteTempFiles()
 end
 
-M.onInit = function() setExtensionUnloadMode(M, "manual") end
--- Exported functions for mod lifecycle
-M.onExtensionLoaded = onExtensionLoaded
-M.onExtensionUnloaded = onExtensionUnloaded
--- M.onModManagerReady = onExtensionLoaded
-M.onModDeactivated = onModDeactivated
-M.onModActivated = onExtensionLoaded
-M.onExit = onExit
-M.onGuiUpdate = onGuiUpdate
+-- ── Public API ────────────────────────────────────────────────────────────────
 
--- Exported functions for mod generation
--- M.generateMultiSlotMod = multislot_module.generateMultiSlotMod
--- M.generateMultiSlotJob = multislot_module.generateMultiSlotJob
+M.onInit             = function() setExtensionUnloadMode(M, "manual") end
+M.onExtensionLoaded  = onExtensionLoaded
+M.onExtensionUnloaded= onExtensionUnloaded
+M.onModDeactivated   = onModDeactivated
+M.onModActivated     = onExtensionLoaded
+M.onExit             = onExit
+M.onGuiUpdate        = onGuiUpdate
+
+-- Generation
 M.generateSeparateMods = generateSeparateMods
-M.generateSeparateJob = generateSeparateJob
-M.generateSpecificMod = generateSpecificMod
+M.generateSeparateJob  = generateSeparateJob
+M.generateSpecificMod  = generateSpecificMod
 
--- Exported functions for template management
--- M.getTemplateNames = template_module.getTemplateNames
--- M.loadTemplateNames = template_module.loadTemplateNames
--- M.makeAndSaveNewTemplate = template_module.makeAndSaveNewTemplate
+-- Settings (backwards compat — delegates to tommot_gmsg_settings)
+M.loadSettings       = function()    if settings_mod then settings_mod.loadSettings() end end
+M.saveSettings       = function()    if settings_mod then settings_mod.saveSettings() end end
+M.setModSettings     = function(j)   if settings_mod then settings_mod.setModSettings(j) end end
+M.sendSettingsToUI   = function()    if settings_mod then settings_mod.sendSettingsToUI() end end
+M.setConcurrencyDelay= function(d)   if settings_mod then settings_mod.setConcurrencyDelay(d) end end
 
--- Exported functions for settings management
-M.loadSettings = loadSettings
-M.saveSettings = saveSettings
-M.setModSettings = setModSettings
-M.sendSettingsToUI = sendSettingsToUI
-M.setConcurrencyDelay = setConcurrencyDelay
+-- Utilities (backwards compat — delegates to lib modules)
+M.deleteTempFiles    = function()    if packer_mod then packer_mod.deleteTempFiles() end end
+M.logToConsole       = function(...) if tommot_lib_logger then tommot_lib_logger.logToConsole(...) end end
+M.GMSGMessage        = function(...) if tommot_lib_logger then tommot_lib_logger.GMSGMessage(...) end end
+M.convertName        = function(n)   if tommot_lib_generator then return tommot_lib_generator.convertName(n) end end
+M.readJsonFile       = function(...) if tommot_lib_fs then return tommot_lib_fs.readJsonFile(...) end end
+M.writeJsonFile      = function(...) if tommot_lib_fs then return tommot_lib_fs.writeJsonFile(...) end end
+M.getModNameFromPath = function(...) if tommot_lib_fs then return tommot_lib_fs.getModNameFromPath(...) end end
+M.isEmptyOrWhitespace= function(...) if tommot_lib_fs then return tommot_lib_fs.isEmptyOrWhitespace(...) end end
+M.getAllVehicles      = function()    if vehicles_mod then return vehicles_mod.getAllVehicles() end end
+M.onFinishGen        = function()    if packer_mod then packer_mod.onFinishGen() end end
+M.getModSlotJbeamPath= function(...) if vehicles_mod then return vehicles_mod.getModSlotJbeamPath(...) end end
+M.getModSlot         = function(...) if vehicles_mod then return vehicles_mod.getModSlot(...) end end
+M.getSlotTypes       = function(...) if vehicles_mod then return vehicles_mod.getSlotTypes(...) end end
 
--- Exported utility functions
-M.deleteTempFiles = deleteTempFiles
-M.logToConsole = logToConsole
-M.GMSGMessage = GMSGMessage
-M.getAllVehicles = getAllVehicles
-M.onFinishGen = onFinishGen
-M.convertName = convertName
-M.readJsonFile = readJsonFile
-M.writeJsonFile = writeJsonFile
-M.getModNameFromPath = getModNameFromPath
-M.isEmptyOrWhitespace = isEmptyOrWhitespace
-M.isModInDB = isModInDB
-M.getModSlotJbeamPath = getModSlotJbeamPath
-M.getModSlot = getModSlot
-M.getSlotTypes = getSlotTypes
-
--- Exported variables
-M.GENERATED_PATH = GENERATED_PATH
--- M.SETTINGS_PATH = SETTINGS_PATH
+-- Constant exposed for mods that read it directly
+M.GENERATED_PATH = "/mods/unpacked/generatedModSlot"
 
 return M
