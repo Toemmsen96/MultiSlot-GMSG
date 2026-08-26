@@ -43,6 +43,12 @@ local function packMod(modPath)
     core_modmanager.packMod(modPath:lower())
 end
 
+-- Experimental function to invalidate the jbeam cache by triggering a file change event.
+local function invalidateJbeamCache()
+    extensions.hook('onFileChanged', "/vehicles/_gmsg_cache_invalidate.jbeam", "added")
+    extensions.hook('onFileChangedEnd')
+end
+
 -- Deletes all files under a directory and removes its packed zip from the mod DB.
 -- modName is the name used by the mod manager (e.g. "generatedmodslot").
 local function deleteGeneratedMod(dirPath, modName)
@@ -55,6 +61,7 @@ local function deleteGeneratedMod(dirPath, modName)
 end
 
 M.initDBSafe        = initDBSafe
+M.invalidateJbeamCache = invalidateJbeamCache
 M.isModInDB         = isModInDB
 M.isModUnpacked     = isModUnpacked
 M.packMod           = packMod

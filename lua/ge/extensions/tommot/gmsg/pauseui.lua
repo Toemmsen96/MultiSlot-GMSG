@@ -1,12 +1,12 @@
--- Pause-menu tab (full action panel — mirrors every control in gmsg/ui.lua's 4 imgui tabs).
+-- Pause-menu tab (full action panel - mirrors every control in gmsg/ui.lua's 4 imgui tabs).
 -- Called directly by the ui-vue MultiSlot mod (extensions.tommot_gmsg_pauseui.*).
 local M = {}
 
 local cardBase = "/ui/ui-vue/mods/MultiSlot/cards/"
 local tabId = "multislot_gmsg"
 local railButtons = {
-    { id = "multislot_gmsg_standalone", label = "Generate Standalone", icon = "puzzleModule", card = "StandaloneCard.vue" },
     { id = "multislot_gmsg_manual",     label = "Generate Manually",   icon = "sync",         card = "ManualCard.vue" },
+    { id = "multislot_gmsg_standalone", label = "Generate Standalone", icon = "puzzleModule", card = "StandaloneCard.vue" },
     { id = "multislot_gmsg_settings",   label = "Settings",            icon = "cogSolid",     card = "SettingsCard.vue" },
     { id = "multislot_gmsg_utils",      label = "Utils",               icon = "wrench",       card = "UtilsCard.vue" },
 }
@@ -20,7 +20,7 @@ local function loadExt(name)
     end
 end
 
--- ── Tab / rail-button registration ──────────────────────────────────────────
+-- Tab / rail-button registration --
 
 function M.register()
     local ok, err = pcall(function()
@@ -57,7 +57,7 @@ function M.unregister()
     end)
 end
 
--- ── State push ───────────────────────────────────────────────────────────────
+-- State push --
 
 local function pushStateToUi()
     guihooks.trigger('MultiSlotState', {
@@ -69,14 +69,14 @@ end
 
 M.requestState = function() pushStateToUi() end
 
--- ── Tab: Generate Standalone ─────────────────────────────────────────────────
+-- Tab: Generate Standalone --
 -- Mirrors renderTabStandalone(): one template -> one specific mod, with its own
 -- output path / autopack / MultiSlot-template / dependency-downloader options.
 M.generateSpecificMod = function(templateName, outputPath, autoPack, addDependencyDownloader, includeMStemplate)
     tommot_modslotGenerator.generateSpecificMod(templateName, templateName, outputPath, autoPack, addDependencyDownloader, includeMStemplate)
 end
 
--- ── Tab: Generate Manually ───────────────────────────────────────────────────
+-- Tab: Generate Manually --
 -- Each button mirrors one imgui button exactly (plain vs "concurrently" variant),
 -- rather than following the Settings "use coroutines" toggle implicitly.
 M.generateMultiSlot = function()
@@ -107,19 +107,25 @@ M.generateAdditionalToMultiSlotConcurrent = function()
     core_jobsystem.create(tommot_gmsg_additionalslots.additionalToMultiSlotJob, cfg().CONCURRENCY_DELAY)
 end
 
--- ── Tab: Settings ────────────────────────────────────────────────────────────
+-- Tab: Settings --
 M.setModSettings = function(json)
     tommot_gmsg_settings.setModSettings(json)
     pushStateToUi()
 end
 
--- ── Tab: Utils ───────────────────────────────────────────────────────────────
+M.resetSettingsToDefaults = function()
+    tommot_gmsg_settings.resetToDefaults()
+    pushStateToUi()
+end
+
+-- Tab: Utils --
 M.rescanTemplates = function()
     tommot_gmsg_templates.getTemplateNames()
     pushStateToUi()
 end
 
 M.reloadModDB = function() core_modmanager.initDB() end
+M.clearCache = function() tommot_gmsg_packer.deleteTempFiles() end
 M.setConcurrencyDelay = function(d) tommot_gmsg_settings.setConcurrencyDelay(d) end
 
 M.reloadGELua = function()

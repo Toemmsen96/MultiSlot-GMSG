@@ -1,10 +1,11 @@
 local M = {}
 
-local isWaitingForAutoPack = false
-local isWaitingForPackAll  = false
-local pendingFinishCount   = 0
-local customOutputPath     = nil
-local customOutputName     = nil
+local isWaitingForAutoPack   = false
+local isWaitingForPackAll    = false
+local isWaitingForVehReload  = false
+local pendingFinishCount     = 0
+local customOutputPath       = nil
+local customOutputName       = nil
 
 local function cfg()    return tommot_gmsg_settings.cfg end
 local function logger() return tommot_lib_logger end
@@ -17,6 +18,12 @@ local function onFinishGen()
     if cfg().AUTOPACK then
         isWaitingForPackAll = true
         logger().logToConsole('W', 'onFinishGen', "Queued for Autopack")
+    end
+    if cfg().QUEUE_VEHICLE_RELOADING then
+        -- initDB() is itself a background job (core_jobsystem.wrap), so the VFS remount
+        -- it triggers isn't done yet here - reloading the vehicle immediately would just
+        -- reload against the still-stale mount. Wait until the mod is visible in the DB.
+        isWaitingForVehReload = true
     end
 end
 
@@ -42,6 +49,14 @@ local function pollPack()
             logger().logToConsole('D', 'Autopack', "Packing generatedModSlot")
             isWaitingForPackAll = false
             modman().packMod(cfg().GENERATED_PATH:lower())
+        end
+    end
+    if isWaitingForVehReload then
+        if modman().isModInDB("generatedmodslot") and core_vehicle_manager then
+            isWaitingForVehReload = false
+            modman().invalidateJbeamCache()
+            core_vehicle_manager.reloadVehicle(0)
+            logger().GMSGMessage("Reloaded vehicle after generation", "Info", "info", 2000)
         end
     end
 end

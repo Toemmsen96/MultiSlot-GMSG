@@ -89,7 +89,7 @@ local function onExtensionLoaded()
 
     jbeamIO = require('jbeam/io')
     if not jbeamIO or not jbeamIO.getPart then
-        log('E', 'multiSlotInjector', "jbeam/io not found — cannot hook")
+        log('E', 'multiSlotInjector', "jbeam/io not found - cannot hook")
         return
     end
 

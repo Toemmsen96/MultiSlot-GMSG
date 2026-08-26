@@ -32,10 +32,12 @@ export default {
 
   // Settings
   setModSettings: json => call("setModSettings", JSON.stringify(json)),
+  resetSettingsToDefaults: () => call("resetSettingsToDefaults"),
 
   // Utils
   rescanTemplates: () => call("rescanTemplates"),
   reloadModDB: () => call("reloadModDB"),
+  clearCache: () => call("clearCache"),
   setConcurrencyDelay: delay => call("setConcurrencyDelay", delay),
   reloadGELua: () => call("reloadGELua"),
   reloadGmsgUI: () => call("reloadGmsgUI"),

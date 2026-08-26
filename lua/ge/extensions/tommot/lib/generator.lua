@@ -41,7 +41,7 @@ end
 --   process  : function(target, source)     required  does the actual work; source is nil if no sources given
 --   onDone   : function()                   optional  called once after all pairs are processed
 -- }
--- job : optional coroutine job — when provided, job.yield() is called after each process() call
+-- job : optional coroutine job - when provided, job.yield() is called after each process() call
 --
 -- Example (two-level, with version skip):
 --   M.generate({

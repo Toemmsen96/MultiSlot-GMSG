@@ -49,7 +49,7 @@ local function getTemplate()
     return nil
 end
 
--- ── Tab: Generate Standalone ─────────────────────────────────────────────────
+-- Tab: Generate Standalone --
 local function renderTabStandalone()
     if selectedTemplate == nil or (templates == nil or #templates == 0) then
         imgui.TextColored(imgui.ImVec4(1, 0, 0, 1), "No Templates found!")
@@ -102,7 +102,7 @@ local function renderTabStandalone()
     if imgui.IsItemHovered() then imgui.SetTooltip("Generates the selected mod with the specified settings") end
 end
 
--- ── Tab: Generate Manually ────────────────────────────────────────────────────
+-- Tab: Generate Manually --
 local function renderTabManual()
     local function loadMultislot()
         if not extensions.isExtensionLoaded("tommot_gmsg_multislot") then
@@ -150,7 +150,7 @@ local function renderTabManual()
     if imgui.IsItemHovered() then imgui.SetTooltip("Generates MultiSlot-Mods from existing Additional Mods, less lag") end
 end
 
--- ── Tab: Settings ─────────────────────────────────────────────────────────────
+-- Tab: Settings --
 local function renderTabSettings()
     libUI.checkboxRow("Generate Separate Mods", generateSeparateCheckboxValue,
         "Generates all Templates as normal Additional Modification Mods")
@@ -191,7 +191,7 @@ local function renderTabSettings()
     end
 end
 
--- ── Tab: Utils ────────────────────────────────────────────────────────────────
+-- Tab: Utils --
 local function renderTabUtils()
     if imgui.Button("Get Templates") then
         templates = getTemplate()
@@ -265,7 +265,7 @@ local function renderTabUtils()
     end
 end
 
--- ── Main render ───────────────────────────────────────────────────────────────
+-- Main render --
 local function render()
     imgui.SetNextWindowSizeConstraints(imgui.ImVec2(256, 256), imgui.ImVec2(1024, 1024))
     imgui.Begin("GMSG UI", nil, imgui.WindowFlags_NoTitleBar + imgui.WindowFlags_MenuBar + imgui.WindowFlags_NoDocking)

@@ -16,7 +16,7 @@ local pauseui_mod
 
 local function cfg() return tommot_gmsg_settings.cfg end
 
--- ── Sub-module loader ─────────────────────────────────────────────────────────
+-- Sub-module loader --
 
 local function loadExt(name)
     if not extensions.isExtensionLoaded(name) then
@@ -41,7 +41,7 @@ local function loadSubModules()
     packer_mod   = tommot_gmsg_packer
 end
 
--- ── Core generation (stays here — orchestrates templates + vehicles) ───────────
+-- Core generation (stays here - orchestrates templates + vehicles) --
 
 local function generate(vehicleDir, templateName, tmpl)
     local convName = tommot_lib_generator.convertName(templateName)
@@ -144,7 +144,7 @@ local function generateSpecificMod(templatePath, templateName, outputPath, autoP
     end
 end
 
--- ── Lifecycle ──────────────────────────────────────────────────────────────────
+-- Lifecycle --
 
 local function onExtensionLoaded()
     setExtensionUnloadMode(M, "manual")
@@ -226,7 +226,7 @@ local function onExit()
     end
 end
 
--- ── Public API ────────────────────────────────────────────────────────────────
+-- Public API --
 
 M.onInit             = function() setExtensionUnloadMode(M, "manual") end
 M.onExtensionLoaded  = onExtensionLoaded
@@ -236,19 +236,19 @@ M.onModActivated     = onExtensionLoaded
 M.onExit             = onExit
 M.onGuiUpdate        = onGuiUpdate
 
--- Generation
+-- Generation --
 M.generateSeparateMods = generateSeparateMods
 M.generateSeparateJob  = generateSeparateJob
 M.generateSpecificMod  = generateSpecificMod
 
--- Settings (backwards compat — delegates to tommot_gmsg_settings)
+-- Settings (backwards compat - delegates to tommot_gmsg_settings) --
 M.loadSettings       = function()    if settings_mod then settings_mod.loadSettings() end end
 M.saveSettings       = function()    if settings_mod then settings_mod.saveSettings() end end
 M.setModSettings     = function(j)   if settings_mod then settings_mod.setModSettings(j) end end
 M.sendSettingsToUI   = function()    if settings_mod then settings_mod.sendSettingsToUI() end end
 M.setConcurrencyDelay= function(d)   if settings_mod then settings_mod.setConcurrencyDelay(d) end end
 
--- Utilities (backwards compat — delegates to lib modules)
+-- Utilities (backwards compat - delegates to lib modules) --
 M.deleteTempFiles    = function()    if packer_mod then packer_mod.deleteTempFiles() end end
 M.logToConsole       = function(...) if tommot_lib_logger then tommot_lib_logger.logToConsole(...) end end
 M.GMSGMessage        = function(...) if tommot_lib_logger then tommot_lib_logger.GMSGMessage(...) end end
@@ -264,10 +264,10 @@ M.getModSlot         = function(...) if vehicles_mod then return vehicles_mod.ge
 M.getSlotTypes       = function(...) if vehicles_mod then return vehicles_mod.getSlotTypes(...) end end
 M.isModInDB          = function(n)   if tommot_lib_modman then return tommot_lib_modman.isModInDB(n) end end
 
--- Constant exposed for mods that read it directly
+-- Constant exposed for mods that read it directly --
 M.GENERATED_PATH = "/mods/unpacked/generatedModSlot"
 
--- ── Pause-menu tab (delegates to tommot_gmsg_pauseui) ───────────────────────────
+-- Pause-menu tab (delegates to tommot_gmsg_pauseui) --
 
 function M.registerPauseUi()
     loadExt("tommot_gmsg_pauseui")

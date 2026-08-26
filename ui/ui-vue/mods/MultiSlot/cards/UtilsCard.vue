@@ -6,13 +6,16 @@
       <b>{{ store.state.templates.length }}</b>
       <BngButton accent="outlined" @click="store.rescanTemplates()">Get Templates</BngButton>
     </div>
-    <BngButton class="ms-self-start" accent="outlined" @click="store.reloadModDB()">Reload ModDB</BngButton>
+    <div class="ms-button-row">
+      <BngButton accent="outlined" @click="store.reloadModDB()">Reload ModDB</BngButton>
+      <BngButton accent="destructive" @click="store.clearCache()">Clear Generated Mods Cache</BngButton>
+    </div>
 
     <BngCardHeading class="block-heading" type="ribbon">Advanced</BngCardHeading>
     <BngSwitch v-model="utils.advancedMode">Advanced Mode</BngSwitch>
 
     <template v-if="utils.advancedMode">
-      <p class="ms-note">Advanced actions can lag or reload the game — use with caution.</p>
+      <p class="ms-note">Advanced actions can lag or reload the game - use with caution.</p>
       <div class="ms-button-row">
         <BngButton accent="destructive" @click="store.reloadGELua()">Reload GELUA</BngButton>
         <BngButton accent="outlined" @click="store.reloadGmsgUI()">Reload gmsgUI</BngButton>

@@ -16,6 +16,14 @@
     <BngSwitch :model-value="!!cfg.AUTOPACK" @update:modelValue="v => store.setSetting('Autopack', v)">
       Autopack all generated Mods (WIP, buggy!)
     </BngSwitch>
+    <BngSwitch :model-value="!!cfg.CACHE_GENERATED_MODS" @update:modelValue="v => store.setSetting('CacheGeneratedMods', v)">
+      Cache Generated Mods (skip regenerating on next launch)
+    </BngSwitch>
+
+    <BngCardHeading class="block-heading" type="ribbon">Vehicle</BngCardHeading>
+    <BngSwitch :model-value="!!cfg.QUEUE_VEHICLE_RELOADING" @update:modelValue="v => store.setSetting('QueueVehicleReloading', v)">
+      Queue Vehicle Reloading (Same as CTRL+R, but automatic after generation)
+    </BngSwitch>
 
     <BngCardHeading class="block-heading" type="ribbon">Logging</BngCardHeading>
     <BngSwitch :model-value="!!cfg.DET_DEBUG" @update:modelValue="v => store.setSetting('DetailedDebug', v)">
@@ -25,12 +33,16 @@
       <span class="ms-field-label">Log Level</span>
       <BngDropdown :items="logLevelItems" :model-value="cfg.LOGLEVEL" @update:modelValue="v => store.setSetting('LogLevel', v)" />
     </div>
+
+    <BngButton class="ms-self-start" accent="destructive" @click="store.resetSettingsToDefaults()">
+      Reset Settings to Default
+    </BngButton>
   </div>
 </template>
 
 <script setup>
 import { computed } from "vue"
-import { BngCardHeading, BngSwitch, BngDropdown } from "@/common/components/base"
+import { BngCardHeading, BngSwitch, BngDropdown, BngButton } from "@/common/components/base"
 import { vBngScopedNav } from "@/common/directives"
 import store from "../store.js"
 
@@ -71,5 +83,9 @@ const logLevelItems = [
 .ms-field-label {
   font-size: 0.85em;
   opacity: 0.75;
+}
+
+.ms-self-start {
+  align-self: flex-start;
 }
 </style>

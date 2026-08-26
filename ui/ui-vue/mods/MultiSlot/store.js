@@ -1,6 +1,6 @@
 // Module-scope singleton store for the MultiSlot pause-menu tab.
 // This tab is an action panel over the existing generator (mirrors gmsg/ui.lua's 4 imgui
-// tabs), not a live-tuning UI — mostly fire-and-forget button actions plus a small local
+// tabs), not a live-tuning UI - mostly fire-and-forget button actions plus a small local
 // edit buffer for the "Generate Standalone" form and a couple of dev-only Utils fields.
 import { reactive } from "vue"
 import { useBridge } from "@/bridge"
@@ -43,19 +43,25 @@ function onState(s) {
   }
 }
 
+// Generation has no completion signal back to the UI (it's fire-and-forget, sometimes
+// a background job), so busy is just a short debounce against double-clicks, not a
+// real "is it done" state.
+const BUSY_DEBOUNCE_MS = 1000
+
 function run(action) {
   state.busy = true
   action()
+  setTimeout(() => { state.busy = false }, BUSY_DEBOUNCE_MS)
 }
 
-// ── Generate Standalone ──
+// -- Generate Standalone --
 function generateSpecificMod() {
   const s = state.standalone
   if (!s.selectedTemplate) return
   run(() => luaApi.generateSpecificMod(s.selectedTemplate, s.outputPath, s.autopack, s.addDependencyDownloader, s.includeMStemplate))
 }
 
-// ── Generate Manually ──
+// -- Generate Manually --
 function generateMultiSlot() { run(luaApi.generateMultiSlot) }
 function generateMultiSlotConcurrent() { run(luaApi.generateMultiSlotConcurrent) }
 function generateSeparate() { run(luaApi.generateSeparate) }
@@ -63,15 +69,18 @@ function generateSeparateConcurrent() { run(luaApi.generateSeparateConcurrent) }
 function generateAdditionalToMultiSlot() { run(luaApi.generateAdditionalToMultiSlot) }
 function generateAdditionalToMultiSlotConcurrent() { run(luaApi.generateAdditionalToMultiSlotConcurrent) }
 
-// ── Settings ──
+// -- Settings --
 function setSetting(key, value) {
   state.cfg[key] = value
   luaApi.setModSettings({ [key]: value })
 }
 
-// ── Utils ──
+function resetSettingsToDefaults() { run(luaApi.resetSettingsToDefaults) }
+
+// -- Utils --
 function rescanTemplates() { run(luaApi.rescanTemplates) }
 function reloadModDB() { luaApi.reloadModDB() }
+function clearCache() { luaApi.clearCache() }
 function setConcurrencyDelay(delay) {
   state.utils.concurrencyDelay = delay
   luaApi.setConcurrencyDelay(delay)
@@ -114,8 +123,10 @@ export default {
   generateAdditionalToMultiSlot,
   generateAdditionalToMultiSlotConcurrent,
   setSetting,
+  resetSettingsToDefaults,
   rescanTemplates,
   reloadModDB,
+  clearCache,
   setConcurrencyDelay,
   reloadGELua,
   reloadGmsgUI,
