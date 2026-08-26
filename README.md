@@ -34,6 +34,22 @@ Can also generate everything as a separate, non Mulislot mod.
 
 </details>
 
+### Vue-Menu integration
+2.6.0 Introduces a new integration into the 0.39 Vue-Based Menu
+
+<details>
+<summary> Pictures: </summary>
+
+![Generate Manually Tab](.readmeImages/vue/regen.png.png)
+![Generate Standalone Tab](.readmeImages/vue/standalone.png.png)
+![Settings Tab](.readmeImages/vue/settings.png)
+![Utils Tab](.readmeImages/vue/utils.png)
+
+
+
+</details>
+
+
 ## Plugins
 - [My Plugins (GitHub)](https://github.com/Toemmsen96/MultiSlotPlugins)
 - Advanced Internals by [wlkmanist](https://www.beamng.com/members/wlkmanist.529857/):
