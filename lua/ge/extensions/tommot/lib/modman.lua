@@ -2,6 +2,11 @@
 
 local M = {}
 
+local function logger() return tommot_lib_logger end
+local function log(level, func, msg)
+    if logger() then logger().logToConsole(level, func, msg) else _G.log(level, func, msg) end
+end
+
 -- Unmounts a directory if mounted, then calls initDB so the VFS rescans it.
 -- Without the unmount, files written to an already-mounted directory are invisible
 -- until the next full restart.
@@ -13,6 +18,7 @@ local function initDBSafe(dirPath)
     if FS:isMounted(dirPath) then
         FS:unmount(dirPath)
         log('D', 'initDBSafe', "Unmounted " .. dirPath .. " for VFS rescan")
+        if logger() then logger().debugMessage("Unmounted " .. dirPath .. " for VFS rescan", "Debug: initDBSafe") end
     end
     core_modmanager.initDB()
 end
@@ -40,6 +46,7 @@ local function packMod(modPath)
     if not isModInDB(name) then
         log('W', 'packMod', "Mod not in DB yet, pack may fail: " .. name)
     end
+    if logger() then logger().debugMessage("Packing mod: " .. modPath, "Debug: packMod") end
     core_modmanager.packMod(modPath:lower())
 end
 

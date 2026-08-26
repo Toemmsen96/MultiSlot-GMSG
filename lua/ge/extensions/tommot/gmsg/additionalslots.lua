@@ -10,6 +10,7 @@ local function cfg()    return tommot_gmsg_settings.cfg end
 local function logger() return tommot_lib_logger end
 
 local function GMSGMessage(msg, title, t, dur) logger().GMSGMessage(msg, title, t, dur) end
+local function log(level, func, msg)           logger().logToConsole(level, func, msg) end
 
 local function dedupeSlotRows(slotTable)
     if type(slotTable) ~= 'table' then return slotTable end
@@ -111,6 +112,7 @@ local function getAdditionalMods(vehicleDir)
                     FS:directoryCreate(cfg().GENERATED_PATH:lower() .. "/vehicles/" .. vehicleDir .. "/modslot/", true)
                     if not fs().writeFileAtomic(outputPath, modifiedJbeam, true) then log('E', 'getAdditionalMods', "Failed to write: " .. outputPath) break end
                     if fs().readJsonFile(outputPath) == nil then log('E', 'getAdditionalMods', "Validation failed: " .. outputPath) break end
+                    logger().debugMessage("Generated additional mod: " .. outputPath, "Debug: getAdditionalMods")
                     table.insert(result, {partKey = partKey, file = file, name = part.information and part.information.name or partKey})
                     break
                 end
@@ -151,6 +153,8 @@ local function generateMultiWithAdditional(vehicleDir, addMods, lpMods)
     end
     multiModTemplate.slots = dedupeSlotRows(multiModTemplate.slots)
     tpl().makeAndSaveNewTemplate(vehicleDir, vehicleModSlot, multiModTemplate, "multimod")
+    logger().debugMessage("Generated combined MultiSlot for " .. vehicleDir
+        .. " (" .. #addMods .. " additional, " .. #lpMods .. " license plate)", "Debug: generateMultiWithAdditional")
 end
 
 local function additionalToMultiSlotJob(job)

@@ -11,6 +11,7 @@ local function vehicles() return tommot_gmsg_vehicles end
 
 local function GMSGMessage(msg, title, t, dur) logger().GMSGMessage(msg, title, t, dur) end
 local function convertName(name)               return gen().convertName(name) end
+local function log(level, func, msg)            logger().logToConsole(level, func, msg) end
 
 local function writeFileAtomic(path, data, compact)
     return fs().writeFileAtomic(path, data, compact)
@@ -28,7 +29,9 @@ local function makeAndSaveNewTemplate(vehicleDir, slotName, helperTemplate, temp
     if saveDir then FS:directoryCreate(saveDir, true) end
     if not writeFileAtomic(savePath, mainPart, true) then
         log('E', 'makeAndSaveNewTemplate', "Failed to save template to: " .. savePath)
+        return
     end
+    logger().debugMessage("Saved template: " .. savePath, "Debug: makeAndSaveNewTemplate")
 end
 
 local function makeAndSaveCustomTemplate(vehicleDir, slotName, helperTemplate, templateName, outputPath)
@@ -47,7 +50,9 @@ local function makeAndSaveCustomTemplate(vehicleDir, slotName, helperTemplate, t
     FS:directoryCreate("mods/" .. outputPath .. "/vehicles/" .. vehicleDir .. "/", true)
     if not writeFileAtomic(savePath, mainPart, true) then
         log('E', 'makeAndSaveCustomTemplate', "Failed to save custom template to: " .. savePath)
+        return
     end
+    logger().debugMessage("Saved custom template: " .. savePath, "Debug: makeAndSaveCustomTemplate")
 end
 
 local function findTemplateVersion(modslotJbeam)
@@ -68,6 +73,7 @@ local function loadTemplate(templateName)
     if template ~= nil then
         templateVersion = template.version or 1.0
         template.version = templateVersion
+        logger().debugMessage("Loaded template: " .. templateName .. " (v" .. tostring(templateVersion) .. ")", "Debug: loadTemplate")
         return template
     end
     log('E', 'loadTemplate', "Failed to load template: " .. templateName)

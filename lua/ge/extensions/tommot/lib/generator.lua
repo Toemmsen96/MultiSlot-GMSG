@@ -1,5 +1,10 @@
 local M = {}
 
+local function logger() return tommot_lib_logger end
+local function log(level, func, msg)
+    if logger() then logger().logToConsole(level, func, msg) else _G.log(level, func, msg) end
+end
+
 local function convertName(name)
     return name:lower():gsub(" ", "_")
 end

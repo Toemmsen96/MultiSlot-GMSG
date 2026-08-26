@@ -7,6 +7,7 @@ local function gen()    return tommot_lib_generator end
 local function logger() return tommot_lib_logger end
 
 local function GMSGMessage(msg, title, t, dur) logger().GMSGMessage(msg, title, t, dur) end
+local function log(level, func, msg)           logger().logToConsole(level, func, msg) end
 
 local function dedupeSlotRows(slotTable)
     if type(slotTable) ~= 'table' then return slotTable end
@@ -54,6 +55,7 @@ local function generateMulti(vehicleDir)
     end
     multiModTemplate.slots = dedupeSlotRows(multiModTemplate.slots)
     tpl().makeAndSaveNewTemplate(vehicleDir, vehicleModSlot, multiModTemplate, "multimod")
+    logger().debugMessage("Generated MultiSlot for " .. vehicleDir, "Debug: generateMulti")
 end
 
 local function generateMultiSlotJob(job)

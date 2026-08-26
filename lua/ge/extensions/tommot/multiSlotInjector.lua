@@ -9,6 +9,11 @@ Hooks jbeam/io.getPart and jbeam/io.getAvailableParts:
 
 local M = {}
 
+local function logger() return tommot_lib_logger end
+local function log(level, func, msg)
+    if logger() then logger().logToConsole(level, func, msg) else _G.log(level, func, msg) end
+end
+
 local jbeamIO = nil
 local originalGetPart = nil
 local originalGetAvailableParts = nil
@@ -53,6 +58,8 @@ local function hookedGetPart(ioCtx, partName)
         default     = multimodPartName,
         description = "MultiSlot",
     })
+
+    log('D', 'hookedGetPart', "Injected MultiSlot into " .. model)
 
     return part, filename
 end
@@ -100,6 +107,7 @@ local function onExtensionLoaded()
     jbeamIO.getAvailableParts = hookedGetAvailableParts
 
     log('D', 'multiSlotInjector', "Hooked jbeam/io.getPart and getAvailableParts")
+    if logger() then logger().debugMessage("Hooked jbeam/io.getPart and getAvailableParts", "Debug: multiSlotInjector") end
 end
 
 local function onExtensionUnloaded()

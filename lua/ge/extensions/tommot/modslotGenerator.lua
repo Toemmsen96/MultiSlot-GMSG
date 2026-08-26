@@ -15,6 +15,9 @@ local addtomulti_mod
 local pauseui_mod
 
 local function cfg() return tommot_gmsg_settings.cfg end
+local function log(level, func, msg)
+    if tommot_lib_logger then tommot_lib_logger.logToConsole(level, func, msg) else _G.log(level, func, msg) end
+end
 
 -- Sub-module loader --
 
@@ -53,7 +56,10 @@ local function generate(vehicleDir, templateName, tmpl)
         tmpl = template_mod.loadTemplate(templateName)
         if tmpl == nil then return end
     end
-    if existingData ~= nil and existingVersion == tmpl.version then return end
+    if existingData ~= nil and existingVersion == tmpl.version then
+        tommot_lib_logger.debugMessage(vehicleDir .. "/" .. templateName .. " up to date, skipping", "Debug: generate")
+        return
+    end
     template_mod.makeAndSaveNewTemplate(vehicleDir, vehicleModSlot, tmpl, convName)
 end
 

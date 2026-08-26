@@ -26,6 +26,15 @@ local DEFAULT_SETTINGS_PATH = "/lua/ge/extensions/tommot/GMSG_Settings.json"
 local function readJsonFile(path)  return tommot_lib_fs.readJsonFile(path) end
 local function writeJsonFile(p, d, c) return tommot_lib_fs.writeJsonFile(p, d, c) end
 local function notify(msg, title, t, dur) tommot_lib_logger.GMSGMessage(msg, title, t, dur) end
+local function log(level, func, msg)      tommot_lib_logger.logToConsole(level, func, msg) end
+
+-- Pushes LOGLEVEL and DET_DEBUG to the logger module so it actually governs
+-- console verbosity and debug popups (not just the values held in cfg).
+local function syncLoggerState()
+    if not tommot_lib_logger then return end
+    tommot_lib_logger.setLogLevel(cfg.LOGLEVEL)
+    tommot_lib_logger.setDetailedDebug(cfg.DET_DEBUG)
+end
 
 local function sendSettingsToUI()
     guihooks.trigger('setModSettings', {
@@ -61,7 +70,7 @@ local function loadSettings()
         for jsonKey, cfgKey in pairs(map) do
             if settings[jsonKey] ~= nil then cfg[cfgKey] = settings[jsonKey] end
         end
-        if tommot_lib_logger then tommot_lib_logger.setLogLevel(cfg.LOGLEVEL) end
+        syncLoggerState()
         notify("Settings loaded", "Info", "info", 2000)
         sendSettingsToUI()
     else
@@ -103,7 +112,7 @@ local function setModSettings(jsonData)
     for jsonKey, cfgKey in pairs(map) do
         if data[jsonKey] ~= nil then cfg[cfgKey] = data[jsonKey] end
     end
-    if tommot_lib_logger and data.LogLevel ~= nil then tommot_lib_logger.setLogLevel(cfg.LOGLEVEL) end
+    syncLoggerState()
     saveSettings()
 end
 
@@ -114,7 +123,7 @@ end
 
 local function resetToDefaults()
     for k, v in pairs(DEFAULTS) do cfg[k] = v end
-    if tommot_lib_logger then tommot_lib_logger.setLogLevel(cfg.LOGLEVEL) end
+    syncLoggerState()
     saveSettings()
     notify("Settings reset to defaults", "Info", "info", 2000)
 end

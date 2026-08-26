@@ -4,6 +4,11 @@
 
 local M = {}
 
+local function logger() return tommot_lib_logger end
+local function log(level, func, msg)
+    if logger() then logger().logToConsole(level, func, msg) else _G.log(level, func, msg) end
+end
+
 local _hooks = {}
 
 local function hook(tbl, funcName, hookFn)
@@ -14,6 +19,7 @@ local function hook(tbl, funcName, hookFn)
     end
     tbl[funcName] = function(...) return hookFn(original, ...) end
     table.insert(_hooks, {tbl = tbl, funcName = funcName, original = original})
+    if logger() then logger().debugMessage("Hooked function: " .. tostring(funcName), "Debug: injector") end
     return function()
         tbl[funcName] = original
     end

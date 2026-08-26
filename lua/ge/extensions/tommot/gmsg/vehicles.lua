@@ -1,7 +1,9 @@
 local M = {}
 
-local function fs()  return tommot_lib_fs end
-local function cfg() return tommot_gmsg_settings.cfg end
+local function fs()     return tommot_lib_fs end
+local function cfg()    return tommot_gmsg_settings.cfg end
+local function logger() return tommot_lib_logger end
+local function log(level, func, msg) logger().logToConsole(level, func, msg) end
 
 local function findMainPart(vehicleJbeam)
     if type(vehicleJbeam) ~= 'table' then return nil end
@@ -24,7 +26,7 @@ local function loadMainSlot(vehicleDir)
         local mainPartKey = findMainPart(vehicleJbeam)
         if mainPartKey then return vehicleJbeam[mainPartKey] end
     end
-    if cfg().DET_DEBUG then log('W', 'loadMainSlot', "No main slot found for " .. vehicleDir) end
+    logger().debugMessage("No main slot found for " .. vehicleDir, "Debug: loadMainSlot")
     return nil
 end
 

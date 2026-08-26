@@ -12,6 +12,9 @@ local railButtons = {
 }
 
 local function cfg() return tommot_gmsg_settings.cfg end
+local function log(level, func, msg)
+    if tommot_lib_logger then tommot_lib_logger.logToConsole(level, func, msg) else _G.log(level, func, msg) end
+end
 
 local function loadExt(name)
     if not extensions.isExtensionLoaded(name) then

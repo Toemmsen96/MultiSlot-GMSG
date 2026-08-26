@@ -10,6 +10,7 @@ local customOutputName       = nil
 local function cfg()    return tommot_gmsg_settings.cfg end
 local function logger() return tommot_lib_logger end
 local function modman() return tommot_lib_modman end
+local function log(level, func, msg) logger().logToConsole(level, func, msg) end
 
 local function onFinishGen()
     pendingFinishCount = pendingFinishCount - 1
@@ -40,6 +41,7 @@ local function pollPack()
     if isWaitingForAutoPack and customOutputPath ~= nil then
         if modman().isModInDB(customOutputName) then
             logger().logToConsole('D', 'Autopack', "Packing mod: /mods" .. customOutputPath:lower())
+            logger().debugMessage("Autopacking: /mods" .. customOutputPath:lower(), "Debug: Autopack")
             modman().packMod("/mods" .. customOutputPath:lower())
             isWaitingForAutoPack = false
         end
@@ -47,6 +49,7 @@ local function pollPack()
     if isWaitingForPackAll then
         if modman().isModUnpacked("generatedmodslot") then
             logger().logToConsole('D', 'Autopack', "Packing generatedModSlot")
+            logger().debugMessage("Autopacking: generatedModSlot", "Debug: Autopack")
             isWaitingForPackAll = false
             modman().packMod(cfg().GENERATED_PATH:lower())
         end
