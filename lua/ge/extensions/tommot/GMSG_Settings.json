@@ -7,5 +7,6 @@
     "MultiSlotMods":false,
     "SeparateMods":false,
     "UseCoroutines":true,
-    "CacheGeneratedMods":true
+    "CacheGeneratedMods":true,
+    "QueueVehicleReloading":true
   }
