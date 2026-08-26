@@ -44,11 +44,11 @@ Can also generate everything as a separate, non Mulislot mod.
 <summary>Current todo list:</summary>
 
 - [ ] **Fix UI issue ingame!!!**
-- [ ] Automatically create a Body with a Mod slot for non modslot vehicles, or solve the issue otherwise, maybe Plate-Slot.
+- [x] Automatically create a Body with a Mod slot for non modslot vehicles, or solve the issue otherwise, maybe Plate-Slot. _LUA hooked works!_
 - [X] Compatibility to MultiSlot for all Mod-Slot-mods _Works_  
 - [ ] Tutorial on creating Plugins for this
 - [X] Change Menu-Setting to Debug-Level instead of Detailed Debug toggle _Somewhat implemented_
-- [ ]  (Later maybe) Add Editor tab, to make Templates inside BeamNG
+- [ ] (Later maybe) Add Editor tab, to make Templates inside BeamNG
 </details>
 
 

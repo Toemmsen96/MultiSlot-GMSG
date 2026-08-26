@@ -103,5 +103,8 @@ M.findTemplateVersion = findTemplateVersion
 M.makeAndSaveNewTemplate = makeAndSaveNewTemplate
 M.makeAndSaveCustomTemplate = makeAndSaveCustomTemplate
 M.getTemplateNames = getTemplateNames
+-- Rescans and returns the current template name list (loadTemplateNames() returns nil on
+-- an empty scan, so normalise to {} for callers that just want an array, e.g. the pause UI).
+M.listTemplateNames = function() return loadTemplateNames() or {} end
 
 return M

@@ -12,6 +12,7 @@ local vehicles_mod
 local packer_mod
 local multislot_mod
 local addtomulti_mod
+local pauseui_mod
 
 local function cfg() return tommot_gmsg_settings.cfg end
 
@@ -185,6 +186,8 @@ local function onExtensionLoaded()
 
     loadExt("tommot_gmsg_ui")
     loadExt("tommot_multiSlotInjector")
+
+    if M.registerPauseUi then M.registerPauseUi() end
 end
 
 local function onExtensionUnloaded()
@@ -204,7 +207,7 @@ local function onModDeactivated(mod)
         packer_mod.deleteTempFiles()
         return
     end
-    for _, name in ipairs({"tommot_gmsg_ui","tommot_gmsg_additionalslots","tommot_gmsg_multislot",
+    for _, name in ipairs({"tommot_gmsg_ui","tommot_gmsg_pauseui","tommot_gmsg_additionalslots","tommot_gmsg_multislot",
                             "tommot_gmsg_templates","tommot_gmsg_vehicles","tommot_gmsg_settings",
                             "tommot_gmsg_packer","tommot_lib_modman","tommot_lib_logger",
                             "tommot_lib_fs","tommot_lib_generator","tommot_modslotGenerator"}) do
@@ -215,7 +218,7 @@ end
 local function onExit()
     log('D', 'onExit', "Exiting")
     if packer_mod and not cfg().CACHE_GENERATED_MODS then packer_mod.deleteTempFiles() end
-    for _, name in ipairs({"tommot_gmsg_ui","tommot_gmsg_additionalslots","tommot_gmsg_multislot",
+    for _, name in ipairs({"tommot_gmsg_ui","tommot_gmsg_pauseui","tommot_gmsg_additionalslots","tommot_gmsg_multislot",
                             "tommot_gmsg_templates","tommot_gmsg_vehicles","tommot_gmsg_settings",
                             "tommot_gmsg_packer","tommot_lib_modman","tommot_lib_logger",
                             "tommot_lib_fs","tommot_lib_generator","tommot_modslotGenerator"}) do
@@ -263,5 +266,17 @@ M.isModInDB          = function(n)   if tommot_lib_modman then return tommot_lib
 
 -- Constant exposed for mods that read it directly
 M.GENERATED_PATH = "/mods/unpacked/generatedModSlot"
+
+-- ── Pause-menu tab (delegates to tommot_gmsg_pauseui) ───────────────────────────
+
+function M.registerPauseUi()
+    loadExt("tommot_gmsg_pauseui")
+    pauseui_mod = tommot_gmsg_pauseui
+    pauseui_mod.register()
+end
+
+function M.unregisterPauseUi()
+    if pauseui_mod then pauseui_mod.unregister() end
+end
 
 return M

@@ -51,7 +51,8 @@ local function getLicensePlateAdditionalMods()
                 if hasLPSlot then
                     if part.information and part.information.name then
                         local n = part.information.name:lower()
-                        if n:find("plate") and n:find("design") then goto continue end
+                        if n:find("plate") and n:find("design") then goto continue end -- skip general license plate designs
+                        if n:find("license_plate_2_1") then goto continue end -- Namibia / Skeleton Coast
                     end
                     local additionalPartKey = fs().ends_with(partKey, "_additional_lp")
                         and partKey:lower()
@@ -67,7 +68,7 @@ local function getLicensePlateAdditionalMods()
                     modifiedJbeam[additionalPartKey].slotType = additionalPartKey
                     modifiedJbeam[partKey] = nil
                     FS:directoryCreate(cfg().GENERATED_PATH:lower() .. "/vehicles/common/modslot/", true)
-                    if not fs().writeFileAtomic(outputPath, modifiedJbeam, true) then
+                    if not fs().writeFileAtomic(outputPath, modifiedJbeam, true) then -- Save the modified jbeam with adjusted slotType
                         log('E', 'getLicensePlateAdditionalMods', "Failed to write: " .. outputPath)
                         goto continue
                     end
