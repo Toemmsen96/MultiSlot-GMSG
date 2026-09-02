@@ -30,7 +30,11 @@ local function toggleUI() M.showUI = not M.showUI end
 
 -- Sync imgui pointers from the shared settings config.
 local function syncFromSettings()
-    local c = tommot_gmsg_settings.cfg
+    local settings = tommot_gmsg_settings
+    if not settings or not settings.cfg then
+        return false
+    end
+    local c = settings.cfg
     generateSeparateCheckboxValue[0]  = c.SEPARATE_MODS
     generateMultiSlotCheckboxValue[0] = c.MULTISLOT_MODS
     generateAdditionalCheckboxValue[0]= c.ADDITIONAL_TO_MULTISLOT
@@ -38,12 +42,18 @@ local function syncFromSettings()
     useCoroutinesCheckboxValue[0]     = c.USE_COROUTINES
     autopackAllCheckboxValue[0]       = c.AUTOPACK
     logLevelSelected[0]               = c.LOGLEVEL
+    return true
 end
 
 local function getTemplate()
     if not extensions.isExtensionLoaded("tommot_gmsg_templates") then
-        extensions.load("tommot_gmsg_templates")
+        local ok = pcall(function()
+            extensions.load("tommot_gmsg_templates")
+            setExtensionUnloadMode("tommot_gmsg_templates", "manual")
+        end)
+        if not ok then return nil end
     end
+    if not tommot_gmsg_templates then return nil end
     local result = tommot_gmsg_templates.loadTemplateNames()
     if result and #result > 0 then return result end
     return nil
@@ -51,6 +61,10 @@ end
 
 -- ── Tab: Generate Standalone ─────────────────────────────────────────────────
 local function renderTabStandalone()
+    if not tommot_modslotGenerator then
+        imgui.TextColored(imgui.ImVec4(1, 0, 0, 1), "Generator extension is not loaded yet.")
+        return
+    end
     if selectedTemplate == nil or (templates == nil or #templates == 0) then
         imgui.TextColored(imgui.ImVec4(1, 0, 0, 1), "No Templates found!")
         imgui.TextColored(imgui.ImVec4(1, 0, 0, 1), "Please download or create at least one MultiSlot / GMSG Plugin")
@@ -104,6 +118,10 @@ end
 
 -- ── Tab: Generate Manually ────────────────────────────────────────────────────
 local function renderTabManual()
+    if not tommot_modslotGenerator then
+        imgui.TextColored(imgui.ImVec4(1, 0, 0, 1), "Generator extension is not loaded yet.")
+        return
+    end
     local function loadMultislot()
         if not extensions.isExtensionLoaded("tommot_gmsg_multislot") then
             extensions.load("tommot_gmsg_multislot")
@@ -152,6 +170,10 @@ end
 
 -- ── Tab: Settings ─────────────────────────────────────────────────────────────
 local function renderTabSettings()
+    if not tommot_gmsg_settings then
+        imgui.TextColored(imgui.ImVec4(1, 0, 0, 1), "Settings extension is not loaded yet.")
+        return
+    end
     libUI.checkboxRow("Generate Separate Mods", generateSeparateCheckboxValue,
         "Generates all Templates as normal Additional Modification Mods")
     libUI.checkboxRow("Generate MultiSlot Mods", generateMultiSlotCheckboxValue,
@@ -178,6 +200,7 @@ local function renderTabSettings()
     if imgui.IsItemHovered() then imgui.SetTooltip("Sets the log level (0 = no logs, 1 = info/warnings, 2 = all logs)") end
 
     if imgui.Button("Save Settings") then
+        if not tommot_gmsg_settings then return end
         tommot_gmsg_settings.setModSettings(jsonEncode({
             SeparateMods          = generateSeparateCheckboxValue[0],
             MultiSlotMods         = generateMultiSlotCheckboxValue[0],
@@ -193,9 +216,13 @@ end
 
 -- ── Tab: Utils ────────────────────────────────────────────────────────────────
 local function renderTabUtils()
+    if not tommot_modslotGenerator then
+        imgui.TextColored(imgui.ImVec4(1, 0, 0, 1), "Generator extension is not loaded yet.")
+        return
+    end
     if imgui.Button("Get Templates") then
         templates = getTemplate()
-        tommot_gmsg_templates.getTemplateNames()
+        if tommot_gmsg_templates then tommot_gmsg_templates.getTemplateNames() end
         if (selectedTemplate == nil or selectedTemplate == "") and templates and #templates > 0 then
             selectedTemplate = templates[1]
         end
@@ -267,6 +294,7 @@ end
 
 -- ── Main render ───────────────────────────────────────────────────────────────
 local function render()
+    if not libUI then return end
     imgui.SetNextWindowSizeConstraints(imgui.ImVec2(256, 256), imgui.ImVec2(1024, 1024))
     imgui.Begin("GMSG UI", nil, imgui.WindowFlags_NoTitleBar + imgui.WindowFlags_MenuBar + imgui.WindowFlags_NoDocking)
     imgui.BeginMenuBar()
@@ -290,9 +318,28 @@ local function onUpdate()
 end
 
 local function onExtensionLoaded()
+    local required = {"tommot_lib_fs", "tommot_lib_generator", "tommot_lib_logger", "tommot_gmsg_settings", "tommot_gmsg_templates", "tommot_modslotGenerator"}
+    for _, name in ipairs(required) do
+        if not extensions.isExtensionLoaded(name) then
+            local ok = pcall(function()
+                extensions.load(name)
+                setExtensionUnloadMode(name, "manual")
+            end)
+            if not ok then
+                log('E', 'gmsg/ui', "Failed to load dependency: " .. name)
+                return
+            end
+        end
+    end
     if not extensions.isExtensionLoaded("tommot_lib_ui") then
-        extensions.load("tommot_lib_ui")
-        setExtensionUnloadMode("tommot_lib_ui", "manual")
+        local ok = pcall(function()
+            extensions.load("tommot_lib_ui")
+            setExtensionUnloadMode("tommot_lib_ui", "manual")
+        end)
+        if not ok then
+            log('E', 'gmsg/ui', "Failed to load tommot_lib_ui")
+            return
+        end
     end
     libUI = tommot_lib_ui
 
